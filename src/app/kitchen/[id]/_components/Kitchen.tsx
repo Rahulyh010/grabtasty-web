@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 /* eslint-disable @next/next/no-img-element */
 'use client'
 
@@ -13,14 +14,11 @@ import {
   MapPin, 
   ChefHat, 
   Utensils, 
-  ArrowRight,
-  Shield,
   Flame,
   Heart,
   Plus,
   Sparkles,
   Crown,
-  Zap,
   Coffee,
   Sun,
   Moon,
@@ -89,13 +87,13 @@ interface SubscriptionData {
 }
 
 const fetchKitchen = async (kitchenId: string): Promise<{data:KitchenData}> => {
-  const response = await fetch(`http://localhost:5000/api/kitchen/${kitchenId}`)
+  const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/kitchen/${kitchenId}`)
   if (!response.ok) throw new Error('Failed to fetch kitchen')
   return response.json()
 }
 
 const fetchSubscriptions = async (kitchenId: string): Promise<{data:SubscriptionData}> => {
-  const response = await fetch(`http://localhost:5000/api/subscriptions/kitchen/${kitchenId}`)
+  const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/subscriptions/kitchen/${kitchenId}`)
   if (!response.ok) throw new Error('Failed to fetch subscriptions')
   return response.json()
 }
@@ -201,6 +199,7 @@ export default function KitchenPage({ kitchenId }: KitchenPageProps) {
     return acc
   }, {} as Record<string, Dish[]>)
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const getSubscriptionGradient = (index: number) => {
     const gradients = [
       'from-violet-500 via-purple-500 to-pink-500',
@@ -488,7 +487,7 @@ export default function KitchenPage({ kitchenId }: KitchenPageProps) {
               {Object.entries(dishesByMealType).map(([mealType, dishes]) => (
                 <TabsContent key={mealType} value={mealType} className="space-y-4">
                   <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
-                    {dishes.map((dish, index) => (
+                    {dishes.map((dish) => (
                       <Card key={dish._id} className="group hover:shadow-2xl transition-all duration-500 hover:scale-[1.02] overflow-hidden border-0 shadow-lg bg-white">
                         <div className="relative h-48 overflow-hidden">
                           <img

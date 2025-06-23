@@ -68,7 +68,7 @@ const NearbyKitchens: React.FC<NearbyKitchensProps> = ({ pincode }) => {
   const { data: kitchens = [], isLoading, error } = useQuery({
     queryKey: ['kitchens', pincode],
     queryFn: async () => {
-      const response = await fetch(`http://localhost:5000/api/kitchen`)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/kitchen`)
       const data = await response.json()
       console.log(data, "kitchens")
       return data?.data?.kitchens || []

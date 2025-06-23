@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useState } from 'react'
 import { Star, Timer, Flame, Plus, Minus } from 'lucide-react'
 import { IDish, FoodType } from './types'

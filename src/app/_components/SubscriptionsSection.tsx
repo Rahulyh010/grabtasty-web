@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Crown } from 'lucide-react'

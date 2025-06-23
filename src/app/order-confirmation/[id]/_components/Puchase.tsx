@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
@@ -55,7 +56,7 @@ interface OrderConfirmationProps {
 }
 
 const fetchPurchase = async (purchaseId: string) => {
-  const response = await fetch(`http://localhost:5000/api/purchases/${purchaseId}`)
+  const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/purchases/${purchaseId}`)
   if (!response.ok) throw new Error('Failed to fetch purchase')
   return response.json()
 }

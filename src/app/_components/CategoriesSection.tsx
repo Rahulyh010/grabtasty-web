@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 import React from 'react'
 import { Utensils, Coffee, Cookie, Wine, ChefHat } from 'lucide-react'
 

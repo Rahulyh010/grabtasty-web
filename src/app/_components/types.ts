@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Food Types
 export type FoodType = 'VEG' | 'NON_VEG' | 'EGG' | 'VEGAN' | 'JAIN'
 

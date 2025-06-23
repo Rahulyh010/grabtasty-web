@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -38,7 +39,7 @@ interface PincodeSearchResponse {
 }
 
 const searchKitchensByPincode = async (pincode: string): Promise<PincodeSearchResponse> => {
-  const response = await fetch(`http://localhost:5000/api/pincode/search/${pincode}`)
+  const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/pincode/search/${pincode}`)
   if (!response.ok) {
     throw new Error('Failed to search kitchens')
   }
@@ -100,6 +101,7 @@ export default function Header({ pincode: initialPincode = '', setPincode }: Hea
     router.push(`/kitchen/${kitchenId}`)
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handlePincodeChange = (pincode: string) => {
     setSelectedPincode(pincode)
     if (setPincode) {

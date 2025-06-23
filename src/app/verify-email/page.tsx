@@ -1,3 +1,6 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable react/no-unescaped-entities */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
@@ -40,7 +43,7 @@ interface ResendEmailResponse {
 }
 
 const verifyEmail = async (token: string): Promise<VerifyEmailResponse> => {
-  const response = await fetch(`http://localhost:5000/api/auth/verify-email/${token}`, {
+  const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/verify-email/${token}`, {
     method: 'GET'
   })
   
@@ -53,7 +56,7 @@ const verifyEmail = async (token: string): Promise<VerifyEmailResponse> => {
 }
 
 const resendVerification = async (email: string): Promise<ResendEmailResponse> => {
-  const response = await fetch('http://localhost:5000/api/auth/send-email-verification', {
+  const response = await fetch( process.env.NEXT_PUBLIC_API_BASE_URL + '/api/auth/send-email-verification', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email })

@@ -25,6 +25,7 @@ import {
   Phone,
 } from 'lucide-react'
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface Subscription {
   _id: string
   kitchenId: {
@@ -50,13 +51,13 @@ interface CheckoutPageProps {
 }
 
 const fetchSubscription = async (subscriptionId: string) => {
-  const response = await fetch(`http://localhost:5000/api/subscriptions/${subscriptionId}`)
+  const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/subscriptions/${subscriptionId}`)
   if (!response.ok) throw new Error('Failed to fetch subscription')
   return response.json()
 }
 
 const createPurchase = async (purchaseData: any) => {
-  const response = await fetch('http://localhost:5000/api/purchases/create', {
+  const response = await fetch( `${process.env.NEXT_PUBLIC_API_BASE_URL}` + '/api/purchases/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(purchaseData)
