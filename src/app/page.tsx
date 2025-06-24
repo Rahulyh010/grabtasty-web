@@ -1,141 +1,160 @@
-"use client"
-import React, { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { fetchDishes } from './_components/api'
-import { IDish, MealType } from './_components/types'
-import Header from './_components/Header'
-import CategoriesSection from './_components/CategoriesSection'
-import DishesSection from './_components/DishesSection'
-import NearbyKitchens from './_components/NearbyKitchens'
-import SubscriptionsSection from './_components/SubscriptionsSection'
-import BottomNavigation from './_components/BottomNavigation'
+import React from "react";
+import Home from "./_components/home/Page";
 
-export default function Home() {
-  const [activeCategory, setActiveCategory] = useState('ALL')
-  const [pincode, setPincode] = useState<string>('')
+import { Metadata } from "next";
 
-  // Fetch all dishes
-  const { data: allDishes = [], isLoading: isDishesLoading, error: dishesError } = useQuery({
-    queryKey: ['dishes'],
-    queryFn: () => fetchDishes(),
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    retry: 2,
-  })
-  
-  // Fetch dishes by category when category changes
-  const { data: categoryDishes = [] } = useQuery({
-    queryKey: ['dishes', activeCategory],
-    queryFn: () => activeCategory === 'ALL' 
-      ? Promise.resolve([]) 
-      : fetchDishes({ mealType: activeCategory as MealType }),
-    enabled: activeCategory !== 'ALL',
-    staleTime: 1000 * 60 * 5,
-    retry: 2,
-  })
+export const metadata: Metadata = {
+  title: "FoodDelivery - Fresh Meals Delivered Fast | Order Online",
+  description:
+    "Order fresh, delicious meals from local kitchens. Fast delivery, breakfast, lunch, dinner & snacks. Free delivery on orders above ₹299. Download now!",
 
-  // Group dishes by meal type for displaying in sections
-  const groupedDishes = React.useMemo(() => {
-    return allDishes.reduce((acc, dish) => {
-      if (!acc[dish.mealType]) {
-        acc[dish.mealType] = []
-      }
-      acc[dish.mealType].push(dish)
-      return acc
-    }, {} as Record<MealType, IDish[]>)
-  }, [allDishes])
+  keywords: [
+    "food delivery",
+    "online food order",
+    "home delivery",
+    "fresh meals",
+    "breakfast delivery",
+    "lunch delivery",
+    "dinner delivery",
+    "local kitchens",
+    "food app",
+    "meal delivery",
+    "restaurant delivery",
+    "quick delivery",
+  ],
 
-  // Get the appropriate dishes based on active category
-  const filteredDishes = activeCategory === 'ALL' ? allDishes : categoryDishes
+  authors: [{ name: "FoodDelivery Team" }],
+  creator: "FoodDelivery",
+  publisher: "FoodDelivery",
 
-  // Loading state
-  if (isDishesLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 pb-24">
-        <Header pincode={pincode} setPincode={setPincode} />
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading delicious meals...</p>
-          </div>
-        </div>
-        <BottomNavigation />
-      </div>
-    )
-  }
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
 
-  // Error state
-  if (dishesError) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 pb-24">
-        <Header pincode={pincode} setPincode={setPincode} />
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <p className="text-red-600 mb-4">Failed to load dishes {JSON.stringify(dishesError)}</p>
-            <button 
-              onClick={() => window.location.reload()} 
-              className="bg-amber-500 text-white px-4 py-2 rounded-lg"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-        <BottomNavigation />
-      </div>
-    )
-  }
+  openGraph: {
+    type: "website",
+    locale: "en_IN",
+    url: "https://www.bellysoul.in",
+    siteName: "FoodDelivery",
+    title: "FoodDelivery - Fresh Meals Delivered Fast",
+    description:
+      "Order fresh, delicious meals from local kitchens. Fast delivery across your city. Breakfast, lunch, dinner & snacks available.",
+    images: [
+      {
+        url: "/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "FoodDelivery - Fresh Meals Delivered Fast",
+        type: "image/jpeg",
+      },
+      {
+        url: "/og-image-square.jpg",
+        width: 1200,
+        height: 1200,
+        alt: "FoodDelivery App",
+        type: "image/jpeg",
+      },
+    ],
+  },
 
+  twitter: {
+    card: "summary_large_image",
+    site: "@fooddelivery",
+    creator: "@fooddelivery",
+    title: "FoodDelivery - Fresh Meals Delivered Fast",
+    description:
+      "Order fresh, delicious meals from local kitchens. Fast delivery, breakfast, lunch, dinner & snacks. Free delivery on orders above ₹299.",
+    images: ["/twitter-image.jpg"],
+  },
+
+  verification: {
+    google: "your-google-verification-code",
+    yandex: "your-yandex-verification-code",
+    yahoo: "your-yahoo-verification-code",
+    other: {
+      "facebook-domain-verification": "your-facebook-verification-code",
+    },
+  },
+
+  alternates: {
+    canonical: "https://www.bellysoul.in/",
+    languages: {
+      "en-IN": "https://www.bellysoul.in//en-in",
+      "hi-IN": "https://www.bellysoul.in//hi-in",
+    },
+  },
+
+  category: "food & dining",
+
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-status-bar-style": "default",
+    "apple-mobile-web-app-title": "FoodDelivery",
+    "mobile-web-app-capable": "yes",
+    "msapplication-TileColor": "#FBBF24",
+    "theme-color": "#FBBF24",
+  },
+
+  manifest: "/manifest.json",
+
+  icons: {
+    icon: [
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-96x96.png", sizes: "96x96", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon-57x57.png", sizes: "57x57", type: "image/png" },
+      { url: "/apple-touch-icon-60x60.png", sizes: "60x60", type: "image/png" },
+      { url: "/apple-touch-icon-72x72.png", sizes: "72x72", type: "image/png" },
+      { url: "/apple-touch-icon-76x76.png", sizes: "76x76", type: "image/png" },
+      {
+        url: "/apple-touch-icon-114x114.png",
+        sizes: "114x114",
+        type: "image/png",
+      },
+      {
+        url: "/apple-touch-icon-120x120.png",
+        sizes: "120x120",
+        type: "image/png",
+      },
+      {
+        url: "/apple-touch-icon-144x144.png",
+        sizes: "144x144",
+        type: "image/png",
+      },
+      {
+        url: "/apple-touch-icon-152x152.png",
+        sizes: "152x152",
+        type: "image/png",
+      },
+      {
+        url: "/apple-touch-icon-180x180.png",
+        sizes: "180x180",
+        type: "image/png",
+      },
+    ],
+    other: [
+      {
+        rel: "apple-touch-icon-precomposed",
+        url: "/apple-touch-icon-precomposed.png",
+      },
+    ],
+  },
+};
+
+export default function page() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 pb-24">
-      <Header pincode={pincode} setPincode={setPincode} />
-      
-      <CategoriesSection 
-        activeCategory={activeCategory} 
-        setActiveCategory={setActiveCategory} 
-      />
-      
-      <div className="space-y-8">
-        {activeCategory === 'ALL' ? (
-          <>
-            {groupedDishes.BREAKFAST && groupedDishes.BREAKFAST.length > 0 && (
-              <DishesSection dishes={groupedDishes.BREAKFAST} title="🌅 Breakfast Specials" />
-            )}
-            
-            {groupedDishes.LUNCH && groupedDishes.LUNCH.length > 0 && (
-              <DishesSection dishes={groupedDishes.LUNCH} title="🍽️ Lunch Favorites" />
-            )}
-            
-            {groupedDishes.DINNER && groupedDishes.DINNER.length > 0 && (
-              <DishesSection dishes={groupedDishes.DINNER} title="🌙 Dinner Delights" />
-            )}
-            
-            {groupedDishes.SNACKS && groupedDishes.SNACKS.length > 0 && (
-              <DishesSection dishes={groupedDishes.SNACKS} title="🍿 Quick Snacks" />
-            )}
-            
-            {groupedDishes.DRINKS && groupedDishes.DRINKS.length > 0 && (
-              <DishesSection dishes={groupedDishes.DRINKS} title="🥤 Refreshing Drinks" />
-            )}
-            
-            <SubscriptionsSection />
-            <NearbyKitchens pincode={pincode} />
-          </>
-        ) : (
-          <>
-            {filteredDishes.length > 0 ? (
-              <DishesSection 
-                dishes={filteredDishes} 
-                title={`${activeCategory.charAt(0)}${activeCategory.slice(1).toLowerCase()} Items`} 
-              />
-            ) : (
-              <div className="px-4 py-8 text-center">
-                <p className="text-gray-600">No items found in this category.</p>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-      
-      <BottomNavigation />
+    <div>
+      <Home />
     </div>
-  )
+  );
 }
