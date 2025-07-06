@@ -14,6 +14,7 @@ export default function ClientProvider({
   return (
     <QueryClientProvider client={queryClient}>
       {children}
+      <div className="h-20"></div>
       <BottomNavigation />
     </QueryClientProvider>
   );
