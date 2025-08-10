@@ -1,328 +1,344 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react/no-unescaped-entities */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { useMutation } from '@tanstack/react-query'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { 
-  Mail, 
-  CheckCircle, 
-  Loader2, 
+import { useState, useEffect, useRef } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter, useSearchParams } from "next/navigation";
+import { z } from "zod";
+import { useAxios } from "@/hooks/useAxios";
+import axios from "axios";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Mail,
+  CheckCircle,
   AlertCircle,
+  ArrowLeft,
   RefreshCw,
-  ArrowRight
-} from 'lucide-react'
+  Timer,
+} from "lucide-react";
 
-interface VerifyEmailResponse {
-  success: boolean
-  message: string
-  data: {
-    user: {
-      id: string
-      name: string
-      email: string
-      emailVerified: boolean
-    }
-  }
-}
+// Validation Schema
+const verifyEmailSchema = z.object({
+  token: z.string().min(6, "Verification code must be 6 digits").max(6),
+});
 
-interface ResendEmailResponse {
-  success: boolean
-  message: string
-  data: {
-    emailVerificationToken: string
-  }
-}
-
-const verifyEmail = async (token: string): Promise<VerifyEmailResponse> => {
-  const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/verify-email/${token}`, {
-    method: 'GET'
-  })
-  
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || 'Verification failed')
-  }
-  
-  return response.json()
-}
-
-const resendVerification = async (email: string): Promise<ResendEmailResponse> => {
-  const response = await fetch( process.env.NEXT_PUBLIC_API_BASE_URL + '/api/auth/send-email-verification', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email })
-  })
-  
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || 'Failed to resend verification')
-  }
-  
-  return response.json()
-}
+type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
 
 export default function VerifyEmailPage() {
-  const router = useRouter()
-  const [verificationToken, setVerificationToken] = useState('')
-  const [user, setUser] = useState<any>(null)
-  const [isManualVerification, setIsManualVerification] = useState(false)
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const email = searchParams.get("email");
 
-  // Load user data from localStorage
+  const [isLoading, setIsLoading] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes for OTP expiry
+  const [resendTimeLeft, setResendTimeLeft] = useState(30); // 30 seconds for resend
+  const [canResend, setCanResend] = useState(false);
+
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [otpValues, setOtpValues] = useState(Array(6).fill(""));
+
+  // Redirect if no email provided
   useEffect(() => {
-    const userData = localStorage.getItem('user')
-    const storedToken = localStorage.getItem('emailVerificationToken')
-    
-    if (userData) {
-      const parsedUser = JSON.parse(userData)
-      setUser(parsedUser)
-      
-      // If already verified, redirect to home
-      if (parsedUser.emailVerified) {
-        router.push('/')
+    if (!email) {
+      router.push("/signup");
+    }
+  }, [email, router]);
+
+  // Timer countdown for OTP expiry
+  useEffect(() => {
+    if (timeLeft > 0) {
+      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [timeLeft]);
+
+  // Timer countdown for resend button
+  useEffect(() => {
+    if (resendTimeLeft > 0) {
+      const timer = setTimeout(
+        () => setResendTimeLeft(resendTimeLeft - 1),
+        1000
+      );
+      return () => clearTimeout(timer);
+    } else {
+      setCanResend(true);
+    }
+  }, [resendTimeLeft]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const handleOtpChange = (index: number, value: string) => {
+    // Only allow digits
+    if (!/^\d*$/.test(value)) return;
+
+    const newOtpValues = [...otpValues];
+    newOtpValues[index] = value;
+    setOtpValues(newOtpValues);
+
+    // Auto-focus next input
+    if (value && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all 6 digits are entered
+    if (
+      newOtpValues.every((val) => val !== "") &&
+      newOtpValues.join("").length === 6
+    ) {
+      handleVerifyEmail(newOtpValues.join(""));
+    }
+  };
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !otpValues[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").replace(/\D/g, "");
+
+    if (pastedData.length === 6) {
+      const newOtpValues = pastedData.split("");
+      setOtpValues(newOtpValues);
+      handleVerifyEmail(pastedData);
+    }
+  };
+
+  const handleVerifyEmail = async (token: string) => {
+    setIsLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      // Use /auth endpoint
+      const response = await axios.post("/auth/verify-email", { token });
+
+      if (response.data.success) {
+        setSuccess("Email verified successfully! Redirecting to profile...");
+        setTimeout(() => {
+          router.push("/profile");
+        }, 2000);
+      } else {
+        setError(response.data.message || "Verification failed");
+        setOtpValues(Array(6).fill(""));
+        inputRefs.current[0]?.focus();
       }
+    } catch (err: any) {
+      const errorMessage =
+        err.response?.data?.message || "Verification failed. Please try again.";
+      setError(errorMessage);
+      setOtpValues(Array(6).fill(""));
+      inputRefs.current[0]?.focus();
+    } finally {
+      setIsLoading(false);
     }
-    
-    if (storedToken) {
-      setVerificationToken(storedToken)
+  };
+
+  const handleResendOtp = async () => {
+    if (!canResend || !email) return;
+
+    setIsResending(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      // Use correct /auth/resend-otp endpoint
+      const response = await axios.post("/auth/resend-otp", {
+        email,
+      });
+
+      if (response.data.success) {
+        setSuccess("Verification code sent successfully!");
+        setTimeLeft(300); // Reset OTP expiry timer to 5 minutes
+        setResendTimeLeft(30); // Reset resend timer to 30 seconds
+        setCanResend(false);
+        setOtpValues(Array(6).fill(""));
+        inputRefs.current[0]?.focus();
+      } else {
+        setError(response.data.message || "Failed to resend code");
+      }
+    } catch (err: any) {
+      const errorMessage =
+        err.response?.data?.message ||
+        "Failed to resend code. Please try again.";
+      setError(errorMessage);
+    } finally {
+      setIsResending(false);
     }
-  }, [router])
+  };
 
-  const verifyMutation = useMutation({
-    mutationFn: verifyEmail,
-    onSuccess: (data) => {
-      // Update user in localStorage
-      const updatedUser = { ...user, emailVerified: true }
-      localStorage.setItem('user', JSON.stringify(updatedUser))
-      
-      // Redirect to home after 2 seconds
-      setTimeout(() => {
-        router.push('/')
-      }, 2000)
-    },
-    onError: (error: Error) => {
-      console.error('Verification error:', error.message)
-    }
-  })
-
-  const resendMutation = useMutation({
-    mutationFn: resendVerification,
-    onSuccess: (data) => {
-      // Update token in localStorage
-      localStorage.setItem('emailVerificationToken', data.data.emailVerificationToken)
-      setVerificationToken(data.data.emailVerificationToken)
-    },
-    onError: (error: Error) => {
-      console.error('Resend error:', error.message)
-    }
-  })
-
-  const handleVerify = (token?: string) => {
-    const tokenToUse = token || verificationToken
-    if (tokenToUse) {
-      verifyMutation.mutate(tokenToUse)
-    }
-  }
-
-  const handleResend = () => {
-    if (user?.email) {
-      resendMutation.mutate(user.email)
-    }
-  }
-
-  const handleManualVerify = (e: React.FormEvent) => {
-    e.preventDefault()
-    handleVerify(verificationToken)
-  }
-
-  // Auto-verify if token exists
-  useEffect(() => {
-    if (verificationToken && !isManualVerification && !verifyMutation.isPending) {
-      // Auto-verify after 1 second
-      const timer = setTimeout(() => {
-        handleVerify(verificationToken)
-      }, 1000)
-      
-      return () => clearTimeout(timer)
-    }
-  }, [verificationToken, isManualVerification])
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-yellow-50 flex items-center justify-center p-4">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p>Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (verifyMutation.isSuccess) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="w-20 h-20 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce">
-            <CheckCircle className="h-10 w-10 text-white" />
-          </div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Email Verified!</h1>
-          <p className="text-gray-600 mb-4">Your email has been successfully verified</p>
-          <p className="text-sm text-gray-500">Redirecting to home page...</p>
-        </div>
-      </div>
-    )
+  if (!email) {
+    return null; // Will redirect in useEffect
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-yellow-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-r from-orange-500 to-yellow-500 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Mail className="h-8 w-8 text-white" />
+          <div className="w-20 h-20 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Mail className="h-10 w-10 text-white" />
           </div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Verify Your Email</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Verify Your Email
+          </h1>
           <p className="text-gray-600">
-            We've sent a verification link to <strong>{user.email}</strong>
+            We've sent a 6-digit verification code to
           </p>
+          <p className="font-medium text-gray-900">{email}</p>
         </div>
 
-        {/* Verification Status */}
-        <Card className="shadow-xl border-0 mb-6">
-          <CardHeader className="bg-gradient-to-r from-orange-500 to-yellow-500 text-white rounded-t-lg">
-            <CardTitle>Email Verification</CardTitle>
+        {/* Verification Form */}
+        <Card className="shadow-xl border-0">
+          <CardHeader className="space-y-1 pb-6">
+            <CardTitle className="text-xl font-semibold text-center">
+              Enter Verification Code
+            </CardTitle>
+            <p className="text-sm text-gray-600 text-center">
+              Code expires in {formatTime(timeLeft)}
+            </p>
           </CardHeader>
-          <CardContent className="p-6">
-            
-            {/* Auto-verification in progress */}
-            {verifyMutation.isPending && (
-              <div className="text-center">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-orange-500" />
-                <p className="text-gray-600">Verifying your email...</p>
-              </div>
-            )}
 
-            {/* Auto-verification waiting */}
-            {!verifyMutation.isPending && !isManualVerification && verificationToken && (
-              <div className="text-center">
-                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Mail className="h-6 w-6 text-orange-500" />
-                </div>
-                <p className="text-gray-600 mb-4">
-                  We found your verification token. Verifying automatically...
-                </p>
-                <Button
-                  onClick={() => setIsManualVerification(true)}
-                  variant="outline"
-                  size="sm"
-                >
-                  Verify Manually Instead
-                </Button>
-              </div>
-            )}
-
-            {/* Manual verification form */}
-            {(isManualVerification || !verificationToken) && !verifyMutation.isPending && (
-              <form onSubmit={handleManualVerify} className="space-y-4">
-                <div>
-                  <Label htmlFor="token">Verification Token</Label>
-                  <Input
-                    id="token"
-                    type="text"
-                    placeholder="Enter verification token"
-                    value={verificationToken}
-                    onChange={(e) => setVerificationToken(e.target.value)}
-                    required
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Check your email for the verification token
-                  </p>
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={!verificationToken}
-                  className="w-full bg-gradient-to-r from-orange-500 to-yellow-500"
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Verify Email
-                </Button>
-              </form>
-            )}
-
-            {/* Error Display */}
-            {verifyMutation.isError && (
-              <Alert variant="destructive" className="mt-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  {verifyMutation.error?.message || 'Verification failed'}
+          <CardContent className="space-y-6">
+            {/* Success Alert */}
+            {success && (
+              <Alert className="border-green-200 bg-green-50">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <AlertDescription className="text-green-700">
+                  {success}
                 </AlertDescription>
               </Alert>
             )}
 
-            {/* Resend Success */}
-            {resendMutation.isSuccess && (
-              <Alert className="mt-4">
-                <CheckCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Verification email sent successfully!
+            {/* Error Alert */}
+            {error && (
+              <Alert className="border-red-200 bg-red-50">
+                <AlertCircle className="h-4 w-4 text-red-500" />
+                <AlertDescription className="text-red-700">
+                  {error}
                 </AlertDescription>
               </Alert>
             )}
-          </CardContent>
-        </Card>
 
-        {/* Resend Verification */}
-        <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
-            <div className="text-center">
-              <p className="text-sm text-gray-600 mb-3">
-                Didn't receive the email?
+            {/* OTP Input */}
+            <div className="space-y-4">
+              <div className="flex justify-center gap-3">
+                {Array(6)
+                  .fill(0)
+                  .map((_, index) => (
+                    <Input
+                      key={index}
+                      ref={(el) => {
+                        inputRefs.current[index] = el;
+                      }}
+                      type="text"
+                      maxLength={1}
+                      value={otpValues[index]}
+                      onChange={(e) => handleOtpChange(index, e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(index, e)}
+                      onPaste={handlePaste}
+                      className="w-12 h-12 text-center text-lg font-semibold border-2 focus:border-orange-500"
+                      disabled={isLoading}
+                    />
+                  ))}
+              </div>
+
+              <p className="text-xs text-gray-500 text-center">
+                Enter the 6-digit code sent to your email
               </p>
+            </div>
+
+            {/* Manual Verify Button (if needed) */}
+            {otpValues.join("").length === 6 && !isLoading && (
               <Button
-                onClick={handleResend}
-                disabled={resendMutation.isPending}
-                variant="outline"
-                size="sm"
+                onClick={() => handleVerifyEmail(otpValues.join(""))}
+                disabled={isLoading}
+                className="w-full h-12 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
               >
-                {resendMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Sending...
-                  </>
+                {isLoading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Verifying...
+                  </div>
                 ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Resend Email
-                  </>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4" />
+                    Verify Email
+                  </div>
                 )}
               </Button>
+            )}
+
+            {/* Resend Section */}
+            <div className="text-center pt-4 border-t">
+              <p className="text-sm text-gray-600 mb-3">
+                Didn't receive the code?
+              </p>
+
+              {canResend ? (
+                <Button
+                  variant="outline"
+                  onClick={handleResendOtp}
+                  disabled={isResending}
+                  className="border-orange-200 text-orange-600 hover:bg-orange-50"
+                >
+                  {isResending ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
+                      Sending...
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <RefreshCw className="h-4 w-4" />
+                      Resend Code
+                    </div>
+                  )}
+                </Button>
+              ) : (
+                <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+                  <Timer className="h-4 w-4" />
+                  Resend available in {resendTimeLeft} seconds
+                </div>
+              )}
+            </div>
+
+            {/* Change Email */}
+            <div className="text-center">
+              <button
+                onClick={() => router.push("/signup")}
+                className="text-sm text-orange-600 hover:text-orange-700 font-medium"
+              >
+                Wrong email? Change it
+              </button>
             </div>
           </CardContent>
         </Card>
 
-        {/* Skip for now (development) */}
+        {/* Back to Signup */}
         <div className="text-center mt-6">
-          <Button
-            onClick={() => router.push('/')}
-            variant="ghost"
-            size="sm"
-            className="text-gray-500 hover:text-gray-700"
+          <button
+            onClick={() => router.push("/signup")}
+            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800"
           >
-            Skip for now
-            <ArrowRight className="h-4 w-4 ml-1" />
-          </Button>
+            <ArrowLeft className="h-4 w-4" />
+            Back to Signup
+          </button>
         </div>
       </div>
     </div>
-  )
+  );
 }

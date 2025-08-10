@@ -1,3 +1,5 @@
+/* eslint-disable react/no-unescaped-entities */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
@@ -9,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { useAxios } from "@/hooks/useAxios";
 import {
   User,
   Mail,
@@ -25,6 +28,7 @@ import {
   Crown,
   Clock,
   Star,
+  LogIn,
 } from "lucide-react";
 
 // TypeScript Interfaces
@@ -33,10 +37,20 @@ interface UserProfile {
   name: string;
   email: string;
   phone: string;
-  emailVerified: boolean;
-  phoneVerified: boolean;
+  isVerified: boolean;
+  isActive: boolean;
+  role: string;
+  address?: {
+    line1?: string;
+    line2?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+    landmark?: string;
+  };
   createdAt: string;
   updatedAt: string;
+  lastLogin?: string;
 }
 
 interface UserProfileResponse {
@@ -47,20 +61,10 @@ interface UserProfileResponse {
   };
 }
 
-interface ProfilePageProps {
-  userId?: string;
-}
-
-// Fetch function
-const fetchUserProfile = async (
-  userId: string
-): Promise<UserProfileResponse> => {
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/profile/${userId}`
-  );
-
-  if (!response.ok) throw new Error("Failed to fetch user profile");
-  return response.json();
+// Fetch function using axios
+const fetchUserProfile = async (api: any): Promise<UserProfileResponse> => {
+  const response = await api.get("/auth/me");
+  return response.data;
 };
 
 // Helper functions
@@ -95,7 +99,7 @@ const quickLinks = [
     title: "My Subscriptions",
     description: "View and manage your active meal subscriptions",
     icon: Package,
-    href: "/orders",
+    href: "/subscriptions",
     color: "from-orange-500 to-red-500",
     bgColor: "bg-orange-50",
   },
@@ -103,34 +107,10 @@ const quickLinks = [
     title: "Delivery Addresses",
     description: "Manage your saved delivery addresses",
     icon: MapPin,
-    href: "/address",
+    href: "/addresses",
     color: "from-blue-500 to-purple-500",
     bgColor: "bg-blue-50",
   },
-  //   {
-  //     title: "Payment Methods",
-  //     description: "Add and manage payment options",
-  //     icon: CreditCard,
-  //     href: "/payment-methods",
-  //     color: "from-green-500 to-emerald-500",
-  //     bgColor: "bg-green-50",
-  //   },
-  //   {
-  //     title: "Notifications",
-  //     description: "Manage your notification preferences",
-  //     icon: Bell,
-  //     href: "/notifications",
-  //     color: "from-purple-500 to-pink-500",
-  //     bgColor: "bg-purple-50",
-  //   },
-  //   {
-  //     title: "Account Settings",
-  //     description: "Update your profile and security settings",
-  //     icon: Settings,
-  //     href: "/settings",
-  //     color: "from-gray-500 to-gray-600",
-  //     bgColor: "bg-gray-50",
-  //   },
 ];
 
 // Profile Stats Component
@@ -141,7 +121,9 @@ function ProfileStats({ user }: { user: UserProfile }) {
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
       <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg text-center">
         <Crown className="h-6 w-6 text-orange-500 mx-auto mb-2" />
-        <p className="text-2xl font-bold text-orange-600">Premium</p>
+        <p className="text-2xl font-bold text-orange-600">
+          {user.role === "USER" ? "Premium" : user.role}
+        </p>
         <p className="text-xs text-orange-600">Member</p>
       </div>
 
@@ -153,7 +135,9 @@ function ProfileStats({ user }: { user: UserProfile }) {
 
       <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg text-center">
         <CheckCircle className="h-6 w-6 text-green-500 mx-auto mb-2" />
-        <p className="text-sm font-semibold text-green-600">Verified</p>
+        <p className="text-sm font-semibold text-green-600">
+          {user.isVerified ? "Verified" : "Unverified"}
+        </p>
         <p className="text-xs text-green-600">Account</p>
       </div>
 
@@ -194,91 +178,141 @@ function QuickLinkCard({ link }: { link: (typeof quickLinks)[0] }) {
   );
 }
 
+// Login Prompt Component
+function LoginPrompt() {
+  const router = useRouter();
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md shadow-xl border-0">
+        <CardContent className="p-8 text-center">
+          <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <User className="h-10 w-10 text-orange-500" />
+          </div>
+
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+            Welcome to Food Hub
+          </h2>
+          <p className="text-gray-600 mb-8">
+            Please sign in to view your profile and manage your meal
+            subscriptions
+          </p>
+
+          <div className="space-y-3">
+            <Button
+              onClick={() => router.push("/signin")}
+              className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
+            >
+              <LogIn className="h-4 w-4 mr-2" />
+              Sign In
+            </Button>
+
+            <Button
+              onClick={() => router.push("/signup")}
+              variant="outline"
+              className="w-full border-orange-200 text-orange-600 hover:bg-orange-50"
+            >
+              Create Account
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// Loading Component
+function ProfileLoading() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 p-4">
+      <div className="max-w-4xl mx-auto pt-8">
+        <Skeleton className="h-8 w-64 mb-8" />
+        <div className="space-y-6">
+          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <div className="grid gap-4 md:grid-cols-2">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-24 w-full" />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Error Component
+function ProfileError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md shadow-xl border-0">
+        <CardContent className="p-8 text-center">
+          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <XCircle className="h-10 w-10 text-red-500" />
+          </div>
+
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+            Something went wrong
+          </h2>
+          <p className="text-gray-600 mb-8">
+            We couldn't load your profile. Please try again.
+          </p>
+
+          <div className="space-y-3">
+            <Button onClick={onRetry} className="w-full">
+              Try Again
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // Main Profile Page Component
 export default function ProfilePage() {
   const router = useRouter();
-  const propUserId = useSearchParams().get("userId");
-  const [userId, setUserId] = useState<string>("");
-
-  // Get userId from localStorage or props
-  useEffect(() => {
-    if (propUserId) {
-      setUserId(propUserId);
-    } else {
-      const storedUser = localStorage.getItem("user");
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        setUserId(parsedUser.id);
-      }
-    }
-  }, [propUserId]);
+  const api = useAxios();
 
   // Fetch user profile
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["userProfile", userId],
-    queryFn: () => fetchUserProfile(userId),
-    enabled: !!userId,
+    queryKey: ["userProfile"],
+    queryFn: () => fetchUserProfile(api),
+    retry: 1,
   });
 
-  const handleLogout = () => {
-    localStorage.removeItem("user");
-    router.push("/login");
+  const handleLogout = async () => {
+    try {
+      await api.post("/auth/signout");
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      // Clear any local storage if needed
+      if (typeof window !== "undefined") {
+        localStorage.clear();
+      }
+      router.push("/signin");
+    }
   };
 
   const handleEditProfile = () => {
     router.push("/profile/edit");
   };
 
-  if (!userId) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 flex items-center justify-center">
-        <div className="text-center">
-          <User className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Please login to view profile
-          </h2>
-          <p className="text-gray-600">
-            You need to be logged in to access your profile
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // Show loading state
+  // if (isLoading) {
+  //   return <ProfileLoading />;
+  // }
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 p-4">
-        <div className="max-w-4xl mx-auto pt-8">
-          <Skeleton className="h-8 w-64 mb-8" />
-          <div className="space-y-6">
-            <Skeleton className="h-64 w-full" />
-            <Skeleton className="h-32 w-full" />
-            <div className="grid gap-4 md:grid-cols-2">
-              {[1, 2, 3, 4].map((i) => (
-                <Skeleton key={i} className="h-24 w-full" />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // Show login prompt for authentication errors
   if (error || !data?.success) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 flex items-center justify-center">
-        <div className="text-center">
-          <XCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Failed to load profile
-          </h2>
-          <p className="text-gray-600 mb-4">
-            There was an error loading your profile information
-          </p>
-          <Button onClick={() => refetch()}>Try Again</Button>
-        </div>
-      </div>
-    );
+    const errorStatus = (error as any)?.response?.status;
+
+    if (errorStatus === 401 || errorStatus === 403) {
+      return <LoginPrompt />;
+    }
+
+    return <LoginPrompt />;
   }
 
   const user = data.data.user;
@@ -289,7 +323,9 @@ export default function ProfilePage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">My Profile</h1>
-          <p className="text-gray-600">Manage your account and preferences</p>
+          <p className="text-gray-600">
+            Manage your account and meal preferences
+          </p>
         </div>
 
         {/* Profile Card */}
@@ -304,7 +340,7 @@ export default function ProfilePage() {
                   <CardTitle className="text-2xl font-bold">
                     {user.name}
                   </CardTitle>
-                  <p className="text-orange-100">Premium Member</p>
+                  <p className="text-orange-100">Food Hub Member</p>
                 </div>
               </div>
               <Button
@@ -344,12 +380,12 @@ export default function ProfilePage() {
                     <span className="text-gray-900">{user.email}</span>
                     <Badge
                       className={
-                        user.emailVerified
+                        user.isVerified
                           ? "bg-green-100 text-green-800 border-green-200"
                           : "bg-red-100 text-red-800 border-red-200"
                       }
                     >
-                      {user.emailVerified ? (
+                      {user.isVerified ? (
                         <>
                           <CheckCircle className="h-3 w-3 mr-1" />
                           Verified
@@ -374,28 +410,38 @@ export default function ProfilePage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-900">{user.phone}</span>
-                    <Badge
-                      className={
-                        user.phoneVerified
-                          ? "bg-green-100 text-green-800 border-green-200"
-                          : "bg-yellow-100 text-yellow-800 border-yellow-200"
-                      }
-                    >
-                      {user.phoneVerified ? (
-                        <>
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Verified
-                        </>
-                      ) : (
-                        <>
-                          <Clock className="h-3 w-3 mr-1" />
-                          Pending
-                        </>
-                      )}
+                    <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                      <Phone className="h-3 w-3 mr-1" />
+                      Active
                     </Badge>
                   </div>
                 </div>
               </div>
+
+              {/* Address if available */}
+              {user.address && (
+                <div className="mt-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <MapPin className="h-4 w-4 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-700">
+                      Address
+                    </span>
+                  </div>
+                  <div className="text-gray-900">
+                    <p>{user.address.line1}</p>
+                    {user.address.line2 && <p>{user.address.line2}</p>}
+                    <p>
+                      {[
+                        user.address.city,
+                        user.address.state,
+                        user.address.pincode,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <Separator />
@@ -420,6 +466,16 @@ export default function ProfilePage() {
                   </p>
                   <p className="text-gray-900">{formatDate(user.updatedAt)}</p>
                 </div>
+                {user.lastLogin && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-1">
+                      Last Login
+                    </p>
+                    <p className="text-gray-900">
+                      {formatDate(user.lastLogin)}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
