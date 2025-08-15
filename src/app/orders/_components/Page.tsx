@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
@@ -8,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { useAxios } from "@/hooks/useAxios";
 import {
   Calendar,
   MapPin,
@@ -24,8 +26,10 @@ import {
   Filter,
   Package,
   Receipt,
+  Loader2,
+  User,
 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 
 // TypeScript Interfaces
 interface ComboConfig {
@@ -86,6 +90,21 @@ interface PurchasesResponse {
 interface OrdersPageProps {
   userId?: string;
 }
+
+// Authentication check function (same as checkout page but without redirect handling)
+const checkAuth = async (api: any) => {
+  try {
+    console.log("🔍 Starting auth check...");
+    const response = await api.get("/auth/me");
+    console.log("✅ Auth check successful:", response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error("❌ Auth check failed:", error);
+    throw new Error(
+      `Authentication failed: ${error.response?.status || "Network error"}`
+    );
+  }
+};
 
 // Fetch function
 const fetchUserPurchases = async (
@@ -306,29 +325,56 @@ function OrderCard({ purchase }: { purchase: Purchase }) {
 
 // Main Orders Page Component
 export default function OrdersPage() {
-  const [userId, setUserId] = useState<string>("");
+  const router = useRouter();
+  const api = useAxios();
+  const [user, setUser] = useState<any>(null);
   const propUserId = useSearchParams().get("userId");
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
-  // Get userId from localStorage or props
+  // Check authentication (same pattern as checkout page)
+  const {
+    data: authData,
+    isLoading: authLoading,
+    error: authError,
+    refetch: refetchAuth,
+  } = useQuery({
+    queryKey: ["auth-check"],
+    queryFn: () => checkAuth(api),
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+  });
+
+  // Set user from auth data or URL param
   useEffect(() => {
-    if (propUserId) {
-      setUserId(propUserId);
-    } else {
-      const storedUser = localStorage.getItem("user");
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        setUserId(parsedUser.id);
-      }
+    console.log("🔍 Auth state changed:", {
+      authData: !!authData,
+      authError: !!authError,
+      authLoading,
+      success: authData?.success,
+    });
+
+    if (authData?.success) {
+      console.log("✅ User authenticated:", authData.data.user);
+      setUser(authData.data.user);
+    } else if (propUserId) {
+      // Fallback to prop userId if provided
+      setUser({ _id: propUserId });
+    } else if (authError && !authLoading) {
+      console.log("❌ Authentication failed");
+      setUser(null);
     }
-  }, [propUserId]);
+  }, [authData, authError, authLoading, propUserId]);
+
+  // Get userId for API calls
+  const userId = user?._id;
 
   // Fetch purchases
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["userPurchases", userId, statusFilter, currentPage],
     queryFn: () => fetchUserPurchases(userId, statusFilter, currentPage),
-    enabled: !!userId,
+    enabled: !!userId, // Only fetch if we have userId
   });
 
   const handleStatusFilter = (status: string) => {
@@ -340,18 +386,47 @@ export default function OrdersPage() {
     setCurrentPage(page);
   };
 
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md shadow-xl border-0">
+          <CardContent className="p-8 text-center">
+            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Loader2 className="h-10 w-10 text-blue-500 animate-spin" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">
+              Loading Orders...
+            </h2>
+            <p className="text-gray-600">
+              Please wait while we load your order history...
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // If no userId available (not authenticated and no prop), show login prompt
   if (!userId) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 flex items-center justify-center">
-        <div className="text-center">
-          <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Please login to view orders
-          </h2>
-          <p className="text-gray-600">
-            You need to be logged in to access your order history
-          </p>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md shadow-xl border-0">
+          <CardContent className="p-8 text-center">
+            <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Package className="h-10 w-10 text-orange-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">
+              Please login to view orders
+            </h2>
+            <p className="text-gray-600 mb-6">
+              You need to be logged in to access your order history
+            </p>
+            <Button onClick={() => router.push("/signin")} className="w-full">
+              Go to Login
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -373,17 +448,23 @@ export default function OrdersPage() {
 
   if (error || !data?.success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 flex items-center justify-center">
-        <div className="text-center">
-          <XCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Failed to load orders
-          </h2>
-          <p className="text-gray-600 mb-4">
-            There was an error loading your order history
-          </p>
-          <Button onClick={() => refetch()}>Try Again</Button>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md shadow-xl border-0">
+          <CardContent className="p-8 text-center">
+            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <XCircle className="h-10 w-10 text-red-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">
+              Failed to load orders
+            </h2>
+            <p className="text-gray-600 mb-6">
+              There was an error loading your order history
+            </p>
+            <Button onClick={() => refetch()} className="w-full">
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -400,6 +481,21 @@ export default function OrdersPage() {
           <p className="text-gray-600">
             Track and manage your subscription orders
           </p>
+
+          {/* Show logged in user */}
+          {user && authData?.success && (
+            <div className="mt-4">
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center gap-2 text-sm text-blue-800">
+                  <User className="h-4 w-4" />
+                  <span>
+                    Viewing orders for: <strong>{user?.name}</strong> (
+                    {user?.email})
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Filters */}

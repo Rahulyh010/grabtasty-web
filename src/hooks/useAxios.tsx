@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useRef, useMemo } from "react";
 import axios from "axios";
@@ -41,6 +42,8 @@ export const useAxios = () => {
       await refreshApi.post("/auth/refresh");
       return true;
     } catch (error) {
+      router.replace("/signin"); // Use replace instead of push to avoid back navigation
+
       console.error("Token refresh failed:", error);
       return false;
     }

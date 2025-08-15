@@ -9,7 +9,7 @@ const BottomNavigation: React.FC = () => {
   const tabs = [
     { id: "home", icon: Home, label: "Home", link: "/" },
     { id: "search", icon: Search, label: "Search", link: "/search" },
-    { id: "cart", icon: ShoppingBag, label: "Cart", link: "/cart" },
+    { id: "Orders", icon: ShoppingBag, label: "Orders", link: "/orders" },
     { id: "favorites", icon: Map, label: "Address", link: "/address" },
     { id: "profile", icon: User, label: "Profile", link: "/profile" },
   ];

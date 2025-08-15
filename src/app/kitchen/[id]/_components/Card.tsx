@@ -1,39 +1,38 @@
-'use client'
+"use client";
 
-import { useRouter } from 'next/navigation'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { 
-  Crown, 
-  Zap, 
-  ArrowRight, 
-  Utensils, 
-  Coffee, 
-  Sun, 
-  Moon, 
-  Cookie, 
-  Sparkles,
-  Shield
-} from 'lucide-react'
+import { useRouter } from "next/navigation";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  ArrowRight,
+  Utensils,
+  Coffee,
+  Sun,
+  Moon,
+  Cookie,
+  CheckCircle,
+  Tag,
+} from "lucide-react";
 
 interface Subscription {
-  _id: string
+  _id: string;
   comboConfig: {
-    name: string
-    description: string
-    mealTypes: string[]
-    cuisineType: string
-    foodType: string
-    price: number
-    discountPercentage?: number
-  }
-  duration: number
-  status: string
+    name: string;
+    description: string;
+    mealTypes: string[];
+    cuisineType: string;
+    foodType: string;
+    price: number;
+    discountPercentage?: number;
+  };
+  duration: number;
+  status: string;
 }
 
 interface SubscriptionCardProps {
-  subscription: Subscription
-  index: number
+  subscription: Subscription;
+  index: number;
 }
 
 const mealTypeIcons = {
@@ -42,109 +41,112 @@ const mealTypeIcons = {
   DINNER: Moon,
   SNACKS: Cookie,
   DRINKS: Utensils,
-}
+};
 
-const getSubscriptionGradient = (index: number) => {
-  const gradients = [
-    'from-violet-500 to-pink-500',
-    'from-blue-500 to-cyan-500', 
-    'from-green-500 to-emerald-500',
-    'from-orange-500 to-red-500',
-    'from-indigo-500 to-purple-500',
-    'from-rose-500 to-pink-500'
-  ]
-  return gradients[index % gradients.length]
-}
-
-export default function SubscriptionCard({ subscription, index }: SubscriptionCardProps) {
-  const router = useRouter()
+export default function SubscriptionCard({
+  subscription,
+}: SubscriptionCardProps) {
+  const router = useRouter();
 
   const handleSubscribe = () => {
-    router.push(`/checkout/${subscription._id}`)
-  }
+    router.push(`/checkout/${subscription._id}`);
+  };
+
+  const dailyPrice = Math.round(
+    subscription.comboConfig.price / subscription.duration
+  );
 
   return (
-    <Card className="group relative overflow-hidden border-0 shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-[1.02] bg-white">
-      {/* Animated Background */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${getSubscriptionGradient(index)} opacity-5 group-hover:opacity-10 transition-opacity duration-500`}></div>
-      
+    <Card className="relative bg-white border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all duration-300 overflow-hidden">
       {/* Discount Badge */}
       {subscription.comboConfig.discountPercentage && (
-        <div className="absolute top-4 right-4 z-10">
-          <div className="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 animate-bounce">
-            <Zap className="h-3 w-3" />
+        <div className="absolute top-3 right-3 z-10">
+          <Badge className="bg-red-50 text-red-600 border-red-200 text-xs font-semibold">
+            <Tag className="h-2.5 w-2.5 mr-1" />
             {subscription.comboConfig.discountPercentage}% OFF
-          </div>
+          </Badge>
         </div>
       )}
 
-      <CardContent className="p-6 space-y-6 relative z-10">
+      <CardContent className="p-5">
         {/* Header */}
-        <div className="text-center space-y-3">
-          <div className={`w-16 h-16 bg-gradient-to-br ${getSubscriptionGradient(index)} rounded-2xl flex items-center justify-center mx-auto mb-4 transform rotate-3 group-hover:rotate-6 transition-transform duration-300`}>
-            <Crown className="h-8 w-8 text-white" />
-          </div>
-          <h3 className="text-xl font-bold text-gray-900">
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2 pr-16">
             {subscription.comboConfig.name}
           </h3>
-          <p className="text-sm text-gray-600 leading-relaxed">
+          <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
             {subscription.comboConfig.description}
           </p>
         </div>
 
-        {/* Price */}
-        <div className="text-center py-4 bg-gray-50 rounded-2xl">
-          <div className="text-3xl font-bold text-gray-900">
-            ₹{subscription.comboConfig.price}
+        {/* Pricing */}
+        <div className="bg-gray-50 rounded-lg p-4 mb-4">
+          <div className="flex items-baseline justify-center mb-1">
+            <span className="text-2xl font-bold text-gray-900">
+              ₹{subscription.comboConfig.price}
+            </span>
+            <span className="text-sm text-gray-500 ml-2">total</span>
           </div>
-          <div className="text-sm text-gray-500">
-            ₹{Math.round(subscription.comboConfig.price / subscription.duration)}/day • {subscription.duration} days
+          <div className="text-center">
+            <span className="text-sm text-gray-600">₹{dailyPrice}/day</span>
+            <span className="mx-2 text-gray-300">•</span>
+            <span className="text-sm text-gray-600">
+              {subscription.duration} days
+            </span>
+          </div>
+        </div>
+
+        {/* Meal Types */}
+        <div className="mb-4">
+          <div className="text-xs font-medium text-gray-700 mb-2">
+            Includes:
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {subscription.comboConfig.mealTypes.map((meal) => {
+              const MealIcon =
+                mealTypeIcons[meal as keyof typeof mealTypeIcons] || Utensils;
+              return (
+                <div
+                  key={meal}
+                  className="flex items-center gap-2 text-sm text-gray-700"
+                >
+                  <div className="w-6 h-6 bg-blue-50 rounded-full flex items-center justify-center flex-shrink-0">
+                    <MealIcon className="h-3 w-3 text-blue-600" />
+                  </div>
+                  <span className="text-xs font-medium">{meal}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {/* Features */}
-        <div className="space-y-3">
-          {subscription.comboConfig.mealTypes.map((meal) => {
-            const MealIcon = mealTypeIcons[meal as keyof typeof mealTypeIcons] || Utensils
-            return (
-              <div key={meal} className="flex items-center gap-3 group/feature hover:bg-gray-50 p-2 rounded-lg transition-colors">
-                <div className={`w-8 h-8 rounded-full bg-gradient-to-r ${getSubscriptionGradient(index)} flex items-center justify-center flex-shrink-0 group-hover/feature:scale-110 transition-transform duration-200`}>
-                  <MealIcon className="h-4 w-4 text-white" />
-                </div>
-                <span className="text-sm text-gray-700 font-medium">{meal}</span>
-              </div>
-            )
-          })}
-          
-          <div className="flex items-center gap-3 group/feature hover:bg-gray-50 p-2 rounded-lg transition-colors">
-            <div className={`w-8 h-8 rounded-full bg-gradient-to-r ${getSubscriptionGradient(index)} flex items-center justify-center flex-shrink-0 group-hover/feature:scale-110 transition-transform duration-200`}>
-              <Sparkles className="h-4 w-4 text-white" />
-            </div>
-            <span className="text-sm text-gray-700 font-medium">
-              {subscription.comboConfig.cuisineType.replace('_', ' ')} Cuisine
+        <div className="mb-5 space-y-2">
+          <div className="flex items-center gap-2 text-xs text-gray-600">
+            <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
+            <span>
+              {subscription.comboConfig.cuisineType.replace("_", " ")} Cuisine
             </span>
           </div>
-
-          <div className="flex items-center gap-3 group/feature hover:bg-gray-50 p-2 rounded-lg transition-colors">
-            <div className={`w-8 h-8 rounded-full bg-gradient-to-r ${getSubscriptionGradient(index)} flex items-center justify-center flex-shrink-0 group-hover/feature:scale-110 transition-transform duration-200`}>
-              <Shield className="h-4 w-4 text-white" />
-            </div>
-            <span className="text-sm text-gray-700 font-medium">Fresh Daily Delivery</span>
+          <div className="flex items-center gap-2 text-xs text-gray-600">
+            <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
+            <span>Fresh Daily Preparation</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-gray-600">
+            <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
+            <span>{subscription.comboConfig.foodType} Options</span>
           </div>
         </div>
 
         {/* CTA Button */}
-        <Button 
+        <Button
           onClick={handleSubscribe}
-          className={`w-full bg-gradient-to-r ${getSubscriptionGradient(index)} hover:shadow-2xl transform hover:scale-105 active:scale-95 transition-all duration-300 text-white font-semibold py-3 rounded-2xl relative overflow-hidden group/btn`}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 text-sm transition-colors duration-200"
         >
-          <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700 skew-x-12"></div>
-          <span className="relative flex items-center justify-center gap-2">
-            Subscribe Now
-            <ArrowRight className="h-4 w-4 group-hover/btn:translate-x-1 transition-transform duration-200" />
-          </span>
+          <span>Choose Plan</span>
+          <ArrowRight className="h-4 w-4 ml-2" />
         </Button>
       </CardContent>
     </Card>
-  )
+  );
 }
