@@ -1,372 +1,428 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @next/next/no-img-element */
 "use client";
+
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation"; // Add this import
-import { fetchDishes } from "../api";
-import { IDish, MealType } from "../types";
-import Header from "../Header";
-import CategoriesSection from "../CategoriesSection";
-import DishesSection from "../DishesSection";
-import BottomNavigation from "../BottomNavigation";
+import { useRouter } from "next/navigation";
+import {
+  Search,
+  MapPin,
+  Clock,
+  Star,
+  ChefHat,
+  Phone,
+  Mail,
+} from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
-// Kitchen interface matching your API
 interface Kitchen {
   _id: string;
   name: string;
   address: string;
+  banner: string;
   pincodes: string[];
   adminName: string;
   phone: string;
   email: string;
+  approved: boolean;
   lastLogin: string | null;
-  todaysMenu: {
-    date: string;
-    dishes: string[];
-    active: boolean;
-  };
-  allDishes: string[];
   createdAt: string;
   updatedAt: string;
-  banner?: string;
-  __v: number;
 }
 
-export default function Home() {
-  const router = useRouter(); // Add router hook
-  const [activeCategory, setActiveCategory] = useState("ALL");
-  const [pincode, setPincode] = useState<string>("");
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+interface KitchenWithSubscriptions extends Kitchen {
+  activeSubscriptions: number;
+  totalPlans: number;
+  rating?: number;
+  deliveryTime?: string;
+}
+
+export default function KitchenDiscoveryLanding() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedKitchen, setSelectedKitchen] = useState<Kitchen | null>(null);
+  const [selectedPincode, setSelectedPincode] = useState("");
+
+  // Fetch kitchens from API
+  const {
+    data: kitchensResponse,
+    isLoading: isKitchensLoading,
+    error: kitchensError,
+  } = useQuery({
+    queryKey: ["kitchens"],
+    queryFn: async (): Promise<{ kitchens: Kitchen[] }> => {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/kitchen`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch kitchens");
+      }
+
+      const data = await response.json();
+      return {
+        kitchens: data?.data?.kitchens || [],
+      };
+    },
+    staleTime: 1000 * 60 * 5,
+    retry: 2,
+  });
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const kitchens = kitchensResponse?.kitchens || [];
+
+  // Get unique pincodes for filter
+  const allPincodes = useMemo(() => {
+    const pincodeSet = new Set<string>();
+    kitchens.forEach((kitchen) => {
+      kitchen.pincodes.forEach((pincode) => pincodeSet.add(pincode));
+    });
+    return Array.from(pincodeSet).sort();
+  }, [kitchens]);
+
+  // Filter kitchens based on search and pincode
+  const filteredKitchens = useMemo(() => {
+    let filtered = kitchens.filter((kitchen) => kitchen.approved);
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (kitchen) =>
+          kitchen.name.toLowerCase().includes(query) ||
+          kitchen.address.toLowerCase().includes(query) ||
+          kitchen.adminName.toLowerCase().includes(query) ||
+          kitchen.pincodes.some((pc) => pc.includes(query))
+      );
+    }
+
+    // Pincode filter
+    if (selectedPincode) {
+      filtered = filtered.filter((kitchen) =>
+        kitchen.pincodes.includes(selectedPincode)
+      );
+    }
+
+    return filtered;
+  }, [searchQuery, selectedPincode, kitchens]);
 
   // Handle kitchen click navigation
   const handleKitchenClick = (kitchen: Kitchen) => {
     router.push(`/kitchen/${kitchen._id}`);
   };
 
-  // Fetch all dishes
-  const {
-    data: allDishes = [],
-    isLoading: isDishesLoading,
-    error: dishesError,
-  } = useQuery({
-    queryKey: ["dishes"],
-    queryFn: () => fetchDishes(),
-    staleTime: 1000 * 60 * 5,
-    retry: 2,
-  });
-
-  // Fetch kitchens from API
-  const {
-    data: kitchens = [],
-    isLoading: isKitchensLoading,
-    error: kitchensError,
-  } = useQuery({
-    queryKey: ["kitchens", pincode],
-    queryFn: async () => {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/kitchen`
-      );
-      const data = await response.json();
-      return data?.data?.kitchens || [];
-    },
-    staleTime: 1000 * 60 * 5,
-    retry: 2,
-  });
-
-  // Local search for kitchens
-  const filteredKitchens = useMemo(() => {
-    if (!searchQuery.trim()) return kitchens;
-
-    return kitchens.filter(
-      (kitchen: Kitchen) =>
-        kitchen.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        kitchen.pincodes.some((pc) => pc.includes(searchQuery)) ||
-        kitchen.address.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [searchQuery, kitchens]);
-
-  // Get dishes for selected kitchen
-  const selectedKitchenDishes = useMemo(() => {
-    if (!selectedKitchen) return [];
-
-    // Filter dishes based on kitchen's todaysMenu or allDishes
-    const kitchenDishIds = selectedKitchen.todaysMenu?.active
-      ? selectedKitchen.todaysMenu.dishes
-      : selectedKitchen.allDishes;
-
-    return allDishes.filter((dish: IDish) =>
-      // @ts-expect-error err
-      kitchenDishIds.includes(dish._id || dish.id)
-    );
-  }, [selectedKitchen, allDishes]);
-
-  // Fetch dishes by category when category changes
-  const { data: categoryDishes = [] } = useQuery({
-    queryKey: ["dishes", activeCategory],
-    queryFn: () =>
-      activeCategory === "ALL"
-        ? Promise.resolve([])
-        : fetchDishes({ mealType: activeCategory as MealType }),
-    enabled: activeCategory !== "ALL",
-    staleTime: 1000 * 60 * 5,
-    retry: 2,
-  });
-
-  // Group dishes by meal type for displaying in sections
-  const groupedDishes = React.useMemo(() => {
-    return allDishes.reduce((acc, dish) => {
-      if (!acc[dish.mealType]) {
-        acc[dish.mealType] = [];
-      }
-      acc[dish.mealType].push(dish);
-      return acc;
-    }, {} as Record<MealType, IDish[]>);
-  }, [allDishes]);
-
-  // Get the appropriate dishes based on active category
-  const filteredDishes = activeCategory === "ALL" ? allDishes : categoryDishes;
-
   // Loading state
-  if (isDishesLoading || isKitchensLoading) {
+  if (isKitchensLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 pb-24">
-        <Header pincode={pincode} setPincode={setPincode} />
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading kitchens...</p>
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50">
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-600">Discovering amazing kitchens...</p>
+            </div>
           </div>
         </div>
-        <BottomNavigation />
       </div>
     );
   }
 
   // Error state
-  if (dishesError || kitchensError) {
+  if (kitchensError) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 pb-24">
-        <Header pincode={pincode} setPincode={setPincode} />
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <p className="text-red-600 mb-4">Failed to load data</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="bg-amber-500 text-white px-4 py-2 rounded-lg"
-            >
-              Retry
-            </button>
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50">
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <p className="text-red-600 mb-4">Failed to load kitchens</p>
+              <Button onClick={() => window.location.reload()}>Retry</Button>
+            </div>
           </div>
         </div>
-        <BottomNavigation />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 pb-24">
-      <Header pincode={pincode} setPincode={setPincode} />
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50">
+      {/* Hero Section */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-orange-500 to-amber-600">
+        <div className="absolute inset-0 bg-black bg-opacity-20"></div>
+        <div className="relative container mx-auto px-4 py-16 lg:py-24">
+          <div className="text-center text-white">
+            <h1 className="text-4xl lg:text-6xl font-bold mb-6">
+              Discover Amazing
+              <span className="block text-yellow-300">Home Kitchens</span>
+            </h1>
+            <p className="text-xl lg:text-2xl mb-8 opacity-90 max-w-3xl mx-auto">
+              Fresh, homemade meals delivered from verified local kitchens.
+              Subscribe to meal plans that fit your taste and lifestyle.
+            </p>
 
-      {/* Local Search Bar */}
-      <div className="px-4 py-4">
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Search by kitchen name or pincode..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
-          <svg
-            className="absolute left-3 top-3.5 h-5 w-5 text-gray-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
+            {/* Search Bar */}
+            <div className="max-w-4xl mx-auto">
+              <div className="flex flex-col lg:flex-row gap-4 bg-white rounded-lg p-4 shadow-2xl">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search by kitchen name, area, or pincode..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 h-12 text-lg border-0 focus:ring-0 shadow-none text-black placeholder:text-gray-400"
+                  />
+                </div>
+                <select
+                  value={selectedPincode}
+                  onChange={(e) => setSelectedPincode(e.target.value)}
+                  className="px-4 h-12 border border-gray-200 rounded-md text-gray-700 bg-white"
+                >
+                  <option value="">All Areas</option>
+                  {allPincodes.map((pincode) => (
+                    <option key={pincode} value={pincode}>
+                      {pincode}
+                    </option>
+                  ))}
+                </select>
+                <Button className="h-12 px-8 bg-orange-500 hover:bg-orange-600">
+                  <Search className="w-5 h-5 mr-2" />
+                  Find Kitchens
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Kitchens Section - Main Focus */}
-      <div className="px-4 mb-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">
-          🍳 Available Kitchens
-        </h2>
+      {/* Stats Section */}
+      <div className="py-12 bg-white border-b">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 text-center">
+            <div>
+              <div className="text-3xl font-bold text-orange-600">
+                {kitchens.length}
+              </div>
+              <div className="text-gray-600">Active Kitchens</div>
+            </div>
+            <div>
+              <div className="text-3xl font-bold text-orange-600">
+                {allPincodes.length}
+              </div>
+              <div className="text-gray-600">Service Areas</div>
+            </div>
+            <div>
+              <div className="text-3xl font-bold text-orange-600">
+                {kitchens.filter((k) => k.approved).length}
+              </div>
+              <div className="text-gray-600">Verified Kitchens</div>
+            </div>
+            <div>
+              <div className="text-3xl font-bold text-orange-600">100%</div>
+              <div className="text-gray-600">Fresh & Homemade</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
+      {/* Search Results Header */}
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">
+              {searchQuery || selectedPincode
+                ? "Search Results"
+                : "All Available Kitchens"}
+            </h2>
+            <p className="text-gray-600">
+              Found {filteredKitchens.length} kitchen
+              {filteredKitchens.length !== 1 ? "s" : ""}
+              {selectedPincode && ` in ${selectedPincode}`}
+            </p>
+          </div>
+
+          {(searchQuery || selectedPincode) && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSearchQuery("");
+                setSelectedPincode("");
+              }}
+            >
+              Clear Filters
+            </Button>
+          )}
+        </div>
+
+        {/* Kitchens Grid */}
         {filteredKitchens.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-gray-600">No kitchens found for your search.</p>
+          <div className="text-center py-16">
+            <ChefHat className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">
+              No kitchens found
+            </h3>
+            <p className="text-gray-500 mb-4">
+              Try adjusting your search criteria or browse all available
+              kitchens
+            </p>
+            <Button
+              onClick={() => {
+                setSearchQuery("");
+                setSelectedPincode("");
+              }}
+            >
+              View All Kitchens
+            </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredKitchens.map((kitchen: Kitchen) => (
-              <div
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredKitchens.map((kitchen) => (
+              <KitchenCard
                 key={kitchen._id}
-                onClick={() => handleKitchenClick(kitchen)} // Updated click handler
-                className={`bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-lg hover:transform hover:scale-105 ${
-                  selectedKitchen?._id === kitchen._id
-                    ? "ring-2 ring-amber-500"
-                    : ""
-                }`}
-              >
-                <div className="relative h-40">
-                  <img
-                    src={
-                      kitchen.banner ||
-                      "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?fm=jpg&q=60&w=800"
-                    }
-                    alt={kitchen.name}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
-                  <div className="absolute bottom-2 left-2">
-                    <h3 className="font-semibold text-lg text-white">
-                      {kitchen.name}
-                    </h3>
-                  </div>
-                </div>
-                <div className="p-3">
-                  <p className="text-sm text-gray-600 mb-2">
-                    📍 {kitchen.address}
-                  </p>
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {kitchen.pincodes.map((pincode, idx) => (
-                      <span
-                        key={idx}
-                        className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded"
-                      >
-                        {pincode}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {kitchen.todaysMenu?.active
-                      ? `${kitchen.todaysMenu.dishes.length} dishes available today`
-                      : `${kitchen.allDishes.length} dishes available`}
-                  </div>
-                </div>
-              </div>
+                kitchen={kitchen}
+                onClick={() => handleKitchenClick(kitchen)}
+              />
             ))}
           </div>
         )}
       </div>
 
-      {/* Selected Kitchen Dishes - Display Only */}
-      {selectedKitchen && selectedKitchenDishes.length > 0 && (
-        <div className="px-4 mb-8">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">
-            🍽️ Available from {selectedKitchen.name}
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {selectedKitchenDishes.map((dish) => (
-              <div
-                key={
-                  // @ts-expect-error err
-                  dish.id
-                }
-                className="bg-white rounded-lg shadow-sm overflow-hidden pointer-events-none"
-              >
-                <div className="aspect-square bg-gray-200 flex items-center justify-center">
-                  {dish.imageUrl ? (
-                    <img
-                      src={dish.imageUrl}
-                      alt={dish.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-3xl">🍽️</span>
-                  )}
-                </div>
-                <div className="p-3">
-                  <h4 className="font-medium text-sm text-gray-800 truncate">
-                    {dish.name}
-                  </h4>
-                  <p className="text-xs text-gray-600 mt-1">₹{dish.price}</p>
-                </div>
-              </div>
-            ))}
+      {/* CTA Section */}
+      <div className="bg-gradient-to-r from-orange-500 to-amber-600 text-white py-16">
+        <div className="container mx-auto px-4 text-center">
+          <h2 className="text-3xl font-bold mb-4">
+            Ready to Start Your Meal Journey?
+          </h2>
+          <p className="text-xl mb-8 opacity-90">
+            Choose from our verified home kitchens and enjoy fresh, healthy
+            meals delivered daily
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button
+              size="lg"
+              className="bg-white text-orange-600 hover:bg-gray-50"
+            >
+              Browse All Kitchens
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="border-white text-white hover:bg-white hover:text-orange-600"
+            >
+              Learn More
+            </Button>
           </div>
-          <p className="text-xs text-gray-500 mt-2 text-center">
-            * Items shown for display only
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Kitchen Card Component
+interface KitchenCardProps {
+  kitchen: Kitchen;
+  onClick: () => void;
+}
+
+function KitchenCard({ kitchen, onClick }: KitchenCardProps) {
+  const isRecentlyActive = kitchen.lastLogin
+    ? new Date(kitchen.lastLogin) >
+      new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    : false;
+
+  return (
+    <Card
+      className="group cursor-pointer overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border-0 shadow-md"
+      onClick={onClick}
+    >
+      <div className="relative">
+        <div className="h-48 overflow-hidden">
+          <img
+            src={
+              kitchen.banner ||
+              `https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400&h=300&fit=crop&auto=format`
+            }
+            alt={kitchen.name}
+            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+          />
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+
+        {/* Status Badges */}
+        <div className="absolute top-3 left-3">
+          {kitchen.approved && (
+            <Badge className="bg-green-500 text-white">
+              <Star className="w-3 h-3 mr-1" />
+              Verified
+            </Badge>
+          )}
+        </div>
+
+        <div className="absolute top-3 right-3">
+          {isRecentlyActive && (
+            <Badge className="bg-blue-500 text-white">
+              <Clock className="w-3 h-3 mr-1" />
+              Active
+            </Badge>
+          )}
+        </div>
+
+        {/* Kitchen Name Overlay */}
+        <div className="absolute bottom-3 left-3 right-3">
+          <h3 className="text-white font-bold text-xl mb-1 line-clamp-1">
+            {kitchen.name}
+          </h3>
+          <p className="text-white/80 text-sm line-clamp-1">
+            by {kitchen.adminName}
           </p>
         </div>
-      )}
-
-      {/* Categories Section - Secondary */}
-      <CategoriesSection
-        activeCategory={activeCategory}
-        setActiveCategory={setActiveCategory}
-      />
-
-      {/* Dishes Sections */}
-      <div className="space-y-8">
-        {activeCategory === "ALL" ? (
-          <>
-            {groupedDishes.BREAKFAST && groupedDishes.BREAKFAST.length > 0 && (
-              <DishesSection
-                dishes={groupedDishes.BREAKFAST}
-                title="🌅 Breakfast Specials"
-              />
-            )}
-
-            {groupedDishes.LUNCH && groupedDishes.LUNCH.length > 0 && (
-              <DishesSection
-                dishes={groupedDishes.LUNCH}
-                title="🍽️ Lunch Favorites"
-              />
-            )}
-
-            {groupedDishes.DINNER && groupedDishes.DINNER.length > 0 && (
-              <DishesSection
-                dishes={groupedDishes.DINNER}
-                title="🌙 Dinner Delights"
-              />
-            )}
-
-            {groupedDishes.SNACKS && groupedDishes.SNACKS.length > 0 && (
-              <DishesSection
-                dishes={groupedDishes.SNACKS}
-                title="🍿 Quick Snacks"
-              />
-            )}
-
-            {groupedDishes.DRINKS && groupedDishes.DRINKS.length > 0 && (
-              <DishesSection
-                dishes={groupedDishes.DRINKS}
-                title="🥤 Refreshing Drinks"
-              />
-            )}
-          </>
-        ) : (
-          <>
-            {filteredDishes.length > 0 ? (
-              <DishesSection
-                dishes={filteredDishes}
-                title={`${activeCategory.charAt(0)}${activeCategory
-                  .slice(1)
-                  .toLowerCase()} Items`}
-              />
-            ) : (
-              <div className="px-4 py-8 text-center">
-                <p className="text-gray-600">
-                  No items found in this category.
-                </p>
-              </div>
-            )}
-          </>
-        )}
       </div>
 
-      {/* Original NearbyKitchens component for additional context */}
-      {/* <NearbyKitchens pincode={pincode} /> */}
-    </div>
+      <CardContent className="p-4">
+        {/* Address */}
+        <div className="flex items-start space-x-2 mb-3">
+          <MapPin className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
+          <p className="text-gray-600 text-sm line-clamp-2">
+            {kitchen.address}
+          </p>
+        </div>
+
+        {/* Service Areas */}
+        <div className="mb-3">
+          <p className="text-xs text-gray-500 mb-2">Service Areas:</p>
+          <div className="flex flex-wrap gap-1">
+            {kitchen.pincodes.slice(0, 3).map((pincode) => (
+              <Badge key={pincode} variant="outline" className="text-xs">
+                {pincode}
+              </Badge>
+            ))}
+            {kitchen.pincodes.length > 3 && (
+              <Badge variant="outline" className="text-xs">
+                +{kitchen.pincodes.length - 3} more
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        {/* Contact Info */}
+        <div className="space-y-1 mb-4">
+          <div className="flex items-center space-x-2 text-xs text-gray-500">
+            <Phone className="w-3 h-3" />
+            <span>{kitchen.phone}</span>
+          </div>
+          <div className="flex items-center space-x-2 text-xs text-gray-500">
+            <Mail className="w-3 h-3" />
+            <span className="truncate">{kitchen.email}</span>
+          </div>
+        </div>
+
+        {/* Action Button */}
+        <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white">
+          View Kitchen
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Home, Search, ShoppingBag, User, Map } from "lucide-react";
+import { Home, ShoppingBag, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const BottomNavigation: React.FC = () => {
@@ -8,10 +8,14 @@ const BottomNavigation: React.FC = () => {
 
   const tabs = [
     { id: "home", icon: Home, label: "Home", link: "/" },
-    { id: "search", icon: Search, label: "Search", link: "/search" },
-    { id: "Orders", icon: ShoppingBag, label: "Orders", link: "/orders" },
-    { id: "favorites", icon: Map, label: "Address", link: "/address" },
+    { id: "Cart", icon: ShoppingBag, label: "Cart", link: "/cart" },
     { id: "profile", icon: User, label: "Profile", link: "/profile" },
+    {
+      id: "subscriptions",
+      icon: User,
+      label: "Subscriptions",
+      link: "/subscriptions",
+    },
   ];
 
   return (

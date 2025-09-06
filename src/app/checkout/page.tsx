@@ -1,7 +1,10 @@
-import React from 'react'
+import React, { Suspense } from "react";
+import CheckoutPage from "./_components/Page";
 
-export default function page() {
+export default function Subscribe() {
   return (
-    <div>page</div>
-  )
+    <Suspense fallback={<div>Loading...</div>}>
+      <CheckoutPage />
+    </Suspense>
+  );
 }
