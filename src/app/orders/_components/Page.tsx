@@ -2,13 +2,8 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
 import { useAxios } from "@/hooks/useAxios";
 import {
   Calendar,
@@ -28,18 +23,67 @@ import {
   Receipt,
   Loader2,
   User,
+  Mail,
+  Home,
+  AlertCircle,
 } from "lucide-react";
-import { useSearchParams, useRouter } from "next/navigation";
 
-// TypeScript Interfaces
-interface ComboConfig {
+// Updated TypeScript Interfaces to match your actual API response
+interface CustomerInfo {
   name: string;
-  description: string;
-  mealTypes: string[];
+  phone: string;
+  email: string;
+  address: string;
+  pincode: string;
+}
+
+interface PaymentDetails {
+  paymentMethod: string;
+  paymentStatus: "SUCCESS" | "FAILED" | "PENDING";
+  paidAt?: string;
+  razorpayPaymentId?: string;
+  transactionId?: string;
+}
+
+interface CustomerPreferences {
+  starchChoice: string;
+  spiceLevel: string;
+  portionSize: string;
+}
+
+interface PurchasedSubscription {
+  customerPreferences: CustomerPreferences;
+  comboId: string;
+  systemCode: string;
+  planName: string;
   cuisineType: string;
+  description: string;
+  pattern: string;
+  patternDescription: string;
+  durationType: "WEEKLY" | "MONTHLY";
+  durationValue: number;
+  unitPrice: number;
+  totalPrice: number;
+  startDate: string;
+  endDate: string;
+  totalDays: number;
+  totalMealsScheduled: number;
+  totalMealsDelivered: number;
+  totalMealsMissed: number;
+  subscriptionStatus: "ACTIVE" | "COMPLETED" | "CANCELLED" | "PAUSED";
+  _id: string;
+}
+
+interface DeliveryScheduleItem {
+  date: string;
+  mealType: string;
   foodType: string;
-  price: number;
-  discountPercentage?: number;
+  cuisineType: string;
+  starchChoice: string;
+  spiceLevel: string;
+  portionSize: string;
+  status: "SCHEDULED" | "DELIVERED" | "MISSED";
+  _id: string;
 }
 
 interface Kitchen {
@@ -49,28 +93,42 @@ interface Kitchen {
   phone: string;
 }
 
-interface Subscription {
-  _id: string;
-  comboConfig: ComboConfig;
-}
-
+// Updated Purchase interface to match your API response exactly
 interface Purchase {
   _id: string;
   userId: string;
-  subscriptionId: Subscription;
-  kitchenId: Kitchen;
-  userAddress: string;
-  userPincode: string;
-  finalPrice: number;
-  startDate: string;
-  endDate: string;
-  duration: number;
-  paymentStatus: "SUCCESS" | "FAILED" | "PENDING";
-  paymentMethod: "UPI" | "CARD" | "NETBANKING" | "WALLET";
-  transactionId: string;
-  status: "ACTIVE" | "COMPLETED" | "CANCELLED" | "PAUSED";
+  kitchenId: Kitchen | null;
+  customerInfo?: CustomerInfo;
+  paymentDetails: PaymentDetails;
+  purchasedSubscriptions: PurchasedSubscription[];
+  deliverySchedule: DeliveryScheduleItem[];
+  subtotal: number;
+  discount: number;
+  taxes: number;
+  finalAmount?: number;
+  purchaseStatus: "ACTIVE" | "COMPLETED" | "CANCELLED" | "PAUSED";
+  purchaseDate: string;
+  overallStartDate: string;
+  overallEndDate: string;
+  overallTotalMealsScheduled: number;
+  overallTotalMealsDelivered: number;
+  overallTotalMealsMissed: number;
   createdAt: string;
   updatedAt: string;
+  __v: number;
+
+  // Legacy fields for backward compatibility
+  userAddress?: string;
+  userPincode?: string;
+  finalPrice?: number;
+  duration?: number;
+  status?: string;
+  paymentStatus?: string;
+  paymentMethod?: string;
+  transactionId?: string;
+  startDate?: string;
+  endDate?: string;
+  subscriptionId?: any;
 }
 
 interface PurchasesResponse {
@@ -87,27 +145,9 @@ interface PurchasesResponse {
   };
 }
 
-interface OrdersPageProps {
-  userId?: string;
-}
-
-// Authentication check function (same as checkout page but without redirect handling)
-const checkAuth = async (api: any) => {
-  try {
-    console.log("🔍 Starting auth check...");
-    const response = await api.get("/auth/me");
-    console.log("✅ Auth check successful:", response.data);
-    return response.data;
-  } catch (error: any) {
-    console.error("❌ Auth check failed:", error);
-    throw new Error(
-      `Authentication failed: ${error.response?.status || "Network error"}`
-    );
-  }
-};
-
-// Fetch function
+// Fetch function updated for your API
 const fetchUserPurchases = async (
+  axios: any,
   userId: string,
   status?: string,
   page: number = 1
@@ -118,12 +158,11 @@ const fetchUserPurchases = async (
     ...(status && status !== "ALL" && { status }),
   });
 
-  const response = await fetch(
+  const response = await axios.get(
     `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/purchase/user/me`
   );
 
-  if (!response.ok) throw new Error("Failed to fetch purchases");
-  return response.json();
+  return response.data;
 };
 
 // Status configuration
@@ -173,70 +212,176 @@ const calculateDaysRemaining = (endDate: string) => {
   return Math.max(0, diffDays);
 };
 
+// Helper function to get the correct values from purchase object
+const getPurchaseValues = (purchase: Purchase) => {
+  return {
+    // Use purchaseStatus or fallback to status
+    status: purchase.purchaseStatus || purchase.status || "ACTIVE",
+
+    // Use finalAmount or fallback to finalPrice
+    finalAmount: purchase.finalAmount || purchase.finalPrice || 0,
+
+    // Use paymentDetails or fallback to legacy fields
+    paymentStatus:
+      purchase.paymentDetails?.paymentStatus ||
+      purchase.paymentStatus ||
+      "PENDING",
+    paymentMethod:
+      purchase.paymentDetails?.paymentMethod || purchase.paymentMethod || "UPI",
+    transactionId:
+      purchase.paymentDetails?.transactionId || purchase.transactionId || "N/A",
+
+    // Use overallStartDate/EndDate or fallback to startDate/endDate
+    startDate:
+      purchase.overallStartDate || purchase.startDate || purchase.createdAt,
+    endDate: purchase.overallEndDate || purchase.endDate || purchase.createdAt,
+
+    // Calculate duration
+    duration:
+      purchase.duration ||
+      (purchase.overallEndDate && purchase.overallStartDate
+        ? Math.ceil(
+            (new Date(purchase.overallEndDate).getTime() -
+              new Date(purchase.overallStartDate).getTime()) /
+              (1000 * 60 * 60 * 24)
+          )
+        : 30),
+
+    // Use customerInfo address or fallback to userAddress
+    deliveryAddress:
+      purchase.customerInfo?.address ||
+      purchase.userAddress ||
+      "Address not available",
+    deliveryPincode:
+      purchase.customerInfo?.pincode || purchase.userPincode || "N/A",
+
+    // Customer info
+    customerName: purchase.customerInfo?.name || "Customer",
+    customerPhone: purchase.customerInfo?.phone || "N/A",
+    customerEmail: purchase.customerInfo?.email || "N/A",
+  };
+};
+
 // Order Card Component
 function OrderCard({ purchase }: { purchase: Purchase }) {
-  const statusInfo = statusConfig[purchase.status];
-  const StatusIcon = statusInfo.icon;
-  const daysRemaining = calculateDaysRemaining(purchase.endDate);
-  const paymentInfo = paymentStatusConfig[purchase.paymentStatus];
+  const values = getPurchaseValues(purchase);
+  const statusInfo =
+    statusConfig[values.status as keyof typeof statusConfig] ||
+    statusConfig.ACTIVE;
+  const StatusIcon = statusInfo?.icon;
+  const daysRemaining = calculateDaysRemaining(values.endDate);
+  const paymentInfo =
+    paymentStatusConfig[
+      values.paymentStatus as keyof typeof paymentStatusConfig
+    ] || paymentStatusConfig.PENDING;
+
+  // Get main subscription info
+  const mainSubscription = purchase.purchasedSubscriptions?.[0];
+  const subscriptionName = mainSubscription?.planName || "Subscription Plan";
+  const cuisineType = mainSubscription?.cuisineType || "Mixed";
 
   return (
-    <Card className="shadow-lg border-0 hover:shadow-xl transition-all duration-300">
-      <CardHeader className="bg-gradient-to-r from-orange-50 to-red-50 rounded-t-lg">
+    <div className="bg-white rounded-xl shadow-lg border hover:shadow-xl transition-all duration-300">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-t-xl p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <CardTitle className="text-lg font-bold text-gray-900">
-              {purchase.subscriptionId.comboConfig.name}
-            </CardTitle>
+            <h3 className="text-lg font-bold text-gray-900">
+              {subscriptionName}
+            </h3>
             <p className="text-sm text-gray-600 mt-1">
               Order #{purchase._id.slice(-8).toUpperCase()}
             </p>
+            <p className="text-sm text-orange-600 font-medium">
+              {cuisineType} Cuisine
+            </p>
           </div>
           <div className="flex items-center gap-2">
-            <Badge className={`${statusInfo.color} border`}>
-              <StatusIcon className="h-3 w-3 mr-1" />
+            <span
+              className={`${statusInfo.color} border px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1`}
+            >
+              <StatusIcon className="h-3 w-3" />
               {statusInfo.label}
-            </Badge>
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="p-6 space-y-4">
-        {/* Kitchen Info */}
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <Utensils className="h-4 w-4 text-orange-500" />
-            <span className="font-semibold text-gray-900">
-              {purchase.kitchenId.name}
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-600">
-            <div className="flex items-center gap-2">
-              <MapPin className="h-3 w-3" />
-              <span className="truncate">{purchase.kitchenId.address}</span>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-6 space-y-4">
+        {/* Kitchen Info */}
+        {purchase.kitchenId ? (
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <Utensils className="h-4 w-4 text-orange-500" />
+              <span className="font-semibold text-gray-900">
+                {purchase.kitchenId.name}
+              </span>
             </div>
-            <div className="flex items-center gap-2">
-              <Phone className="h-3 w-3" />
-              <span>{purchase.kitchenId.phone}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-600">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-3 w-3" />
+                <span className="truncate">{purchase.kitchenId.address}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Phone className="h-3 w-3" />
+                <span>{purchase.kitchenId.phone}</span>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Meal Types */}
-        <div>
-          <p className="text-sm font-medium text-gray-700 mb-2">Meal Types:</p>
-          <div className="flex flex-wrap gap-2">
-            {purchase.subscriptionId.comboConfig.mealTypes.map(
-              (meal, index) => (
-                <Badge key={index} variant="secondary" className="text-xs">
-                  {meal}
-                </Badge>
-              )
-            )}
+        ) : (
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="flex items-center gap-2 text-gray-500">
+              <AlertCircle className="h-4 w-4" />
+              <span className="text-sm">Kitchen information not available</span>
+            </div>
           </div>
-        </div>
+        )}
 
-        <Separator />
+        {/* Subscription Plans */}
+        {purchase.purchasedSubscriptions &&
+          purchase.purchasedSubscriptions.length > 0 && (
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">
+                Subscription Plans:
+              </p>
+              <div className="space-y-2">
+                {purchase.purchasedSubscriptions.map((sub) => (
+                  <div key={sub._id} className="bg-blue-50 p-3 rounded-lg">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h4 className="font-medium text-gray-900">
+                          {sub.planName}
+                        </h4>
+                        <p className="text-xs text-gray-600">
+                          {sub.description}
+                        </p>
+                      </div>
+                      <span className="text-sm font-bold text-blue-600">
+                        ₹{sub.totalPrice}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                      <span>
+                        Duration: {sub.durationType} ({sub.durationValue})
+                      </span>
+                      <span>Meals: {sub.totalMealsScheduled}</span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      <span className="bg-white px-2 py-1 rounded text-xs border">
+                        {sub.patternDescription}
+                      </span>
+                      <span className="bg-white px-2 py-1 rounded text-xs border">
+                        {sub.customerPreferences.spiceLevel} Spice
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+        <div className="border-t pt-4"></div>
 
         {/* Duration & Dates */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -244,12 +389,12 @@ function OrderCard({ purchase }: { purchase: Purchase }) {
             <div className="flex items-center gap-2 text-sm">
               <Calendar className="h-4 w-4 text-blue-500" />
               <span className="font-medium">Start Date:</span>
-              <span>{formatDate(purchase.startDate)}</span>
+              <span>{formatDate(values.startDate)}</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <Calendar className="h-4 w-4 text-red-500" />
               <span className="font-medium">End Date:</span>
-              <span>{formatDate(purchase.endDate)}</span>
+              <span>{formatDate(values.endDate)}</span>
             </div>
           </div>
 
@@ -257,9 +402,9 @@ function OrderCard({ purchase }: { purchase: Purchase }) {
             <div className="flex items-center gap-2 text-sm">
               <Clock className="h-4 w-4 text-purple-500" />
               <span className="font-medium">Duration:</span>
-              <span>{purchase.duration} days</span>
+              <span>{values.duration} days</span>
             </div>
-            {purchase.status === "ACTIVE" && (
+            {values.status === "ACTIVE" && (
               <div className="flex items-center gap-2 text-sm">
                 <RotateCcw className="h-4 w-4 text-green-500" />
                 <span className="font-medium">Days Left:</span>
@@ -271,19 +416,25 @@ function OrderCard({ purchase }: { purchase: Purchase }) {
           </div>
         </div>
 
-        <Separator />
+        <div className="border-t pt-4"></div>
 
         {/* Payment Info */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm">
               <Receipt className="h-4 w-4 text-green-500" />
-              <span className="font-medium">Amount:</span>
-              <span className="font-bold text-lg">₹{purchase.finalPrice}</span>
+              <span className="font-medium">Total Amount:</span>
+              <span className="font-bold text-lg">₹{values.finalAmount}</span>
             </div>
-            <div className="text-xs text-gray-500">
-              ₹{Math.round(purchase.finalPrice / purchase.duration)}/day
-            </div>
+            {purchase.subtotal && (
+              <div className="text-xs text-gray-500 space-y-1">
+                <div>Subtotal: ₹{purchase.subtotal}</div>
+                {purchase.discount > 0 && (
+                  <div>Discount: -₹{purchase.discount}</div>
+                )}
+                {purchase.taxes > 0 && <div>Taxes: +₹{purchase.taxes}</div>}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -293,88 +444,96 @@ function OrderCard({ purchase }: { purchase: Purchase }) {
               <span className={paymentInfo.color}>{paymentInfo.label}</span>
             </div>
             <div className="text-xs text-gray-500">
-              {purchase.paymentMethod} • {purchase.transactionId}
+              {values.paymentMethod} • {values.transactionId}
             </div>
           </div>
         </div>
 
-        {/* Delivery Address */}
-        <div className="bg-blue-50 p-3 rounded-lg">
-          <div className="flex items-start gap-2">
-            <MapPin className="h-4 w-4 text-blue-500 mt-0.5" />
+        {/* Customer & Delivery Info */}
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <p className="font-medium text-sm text-gray-900">
+              <h4 className="font-medium text-sm text-gray-900 mb-2 flex items-center gap-2">
+                <User className="h-4 w-4 text-blue-500" />
+                Customer Info:
+              </h4>
+              <div className="text-sm text-gray-600 space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{values.customerName}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="h-3 w-3" />
+                  {values.customerPhone}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Mail className="h-3 w-3" />
+                  {values.customerEmail}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-medium text-sm text-gray-900 mb-2 flex items-center gap-2">
+                <Home className="h-4 w-4 text-blue-500" />
                 Delivery Address:
-              </p>
-              <p className="text-sm text-gray-600">{purchase.userAddress}</p>
-              <p className="text-sm text-gray-600">
-                Pincode: {purchase.userPincode}
-              </p>
+              </h4>
+              <div className="text-sm text-gray-600">
+                <p>{values.deliveryAddress}</p>
+                <p className="mt-1">Pincode: {values.deliveryPincode}</p>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Meal Progress */}
+        {purchase.overallTotalMealsScheduled > 0 && (
+          <div className="bg-green-50 p-4 rounded-lg">
+            <h4 className="font-medium text-sm text-gray-900 mb-2">
+              Meal Progress:
+            </h4>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="text-lg font-bold text-blue-600">
+                  {purchase.overallTotalMealsScheduled}
+                </div>
+                <div className="text-xs text-gray-600">Scheduled</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-green-600">
+                  {purchase.overallTotalMealsDelivered}
+                </div>
+                <div className="text-xs text-gray-600">Delivered</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-red-600">
+                  {purchase.overallTotalMealsMissed}
+                </div>
+                <div className="text-xs text-gray-600">Missed</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Order Date */}
-        <div className="text-xs text-gray-500 text-center">
-          Ordered on {formatDate(purchase.createdAt)}
+        <div className="text-xs text-gray-500 text-center pt-2 border-t">
+          Ordered on {formatDate(purchase.purchaseDate || purchase.createdAt)}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
 // Main Orders Page Component
 export default function OrdersPage() {
-  const router = useRouter();
   const api = useAxios();
-  const [user, setUser] = useState<any>(null);
-  const propUserId = useSearchParams().get("userId");
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
-  // Check authentication (same pattern as checkout page)
-  const {
-    data: authData,
-    isLoading: authLoading,
-    error: authError,
-    refetch: refetchAuth,
-  } = useQuery({
-    queryKey: ["auth-check"],
-    queryFn: () => checkAuth(api),
-    retry: false,
-    refetchOnWindowFocus: false,
-    refetchOnMount: true,
-  });
-
-  // Set user from auth data or URL param
-  useEffect(() => {
-    console.log("🔍 Auth state changed:", {
-      authData: !!authData,
-      authError: !!authError,
-      authLoading,
-      success: authData?.success,
-    });
-
-    if (authData?.success) {
-      console.log("✅ User authenticated:", authData.data.user);
-      setUser(authData.data.user);
-    } else if (propUserId) {
-      // Fallback to prop userId if provided
-      setUser({ _id: propUserId });
-    } else if (authError && !authLoading) {
-      console.log("❌ Authentication failed");
-      setUser(null);
-    }
-  }, [authData, authError, authLoading, propUserId]);
-
-  // Get userId for API calls
-  const userId = user?._id;
-
-  // Fetch purchases
+  // Fetch purchases directly without auth check
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["userPurchases", userId, statusFilter, currentPage],
-    queryFn: () => fetchUserPurchases(userId, statusFilter, currentPage),
-    enabled: !!userId, // Only fetch if we have userId
+    queryKey: ["userPurchases", statusFilter, currentPage],
+    queryFn: () => fetchUserPurchases(api, "dummy", statusFilter, currentPage),
+    retry: 2,
   });
 
   const handleStatusFilter = (status: string) => {
@@ -386,59 +545,17 @@ export default function OrdersPage() {
     setCurrentPage(page);
   };
 
-  // Show loading state while checking authentication
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md shadow-xl border-0">
-          <CardContent className="p-8 text-center">
-            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Loader2 className="h-10 w-10 text-blue-500 animate-spin" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Loading Orders...
-            </h2>
-            <p className="text-gray-600">
-              Please wait while we load your order history...
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // If no userId available (not authenticated and no prop), show login prompt
-  if (!userId) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md shadow-xl border-0">
-          <CardContent className="p-8 text-center">
-            <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Package className="h-10 w-10 text-orange-500" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Please login to view orders
-            </h2>
-            <p className="text-gray-600 mb-6">
-              You need to be logged in to access your order history
-            </p>
-            <Button onClick={() => router.push("/signin")} className="w-full">
-              Go to Login
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 p-4">
         <div className="max-w-4xl mx-auto pt-8">
-          <Skeleton className="h-8 w-64 mb-8" />
+          <div className="h-8 w-64 bg-gray-200 rounded animate-pulse mb-8"></div>
           <div className="space-y-6">
             {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-64 w-full" />
+              <div
+                key={i}
+                className="h-64 w-full bg-gray-200 rounded animate-pulse"
+              ></div>
             ))}
           </div>
         </div>
@@ -446,31 +563,32 @@ export default function OrdersPage() {
     );
   }
 
-  if (error || !data?.success) {
+  if (error || !data) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md shadow-xl border-0">
-          <CardContent className="p-8 text-center">
-            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <XCircle className="h-10 w-10 text-red-500" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Failed to load orders
-            </h2>
-            <p className="text-gray-600 mb-6">
-              There was an error loading your order history
-            </p>
-            <Button onClick={() => refetch()} className="w-full">
-              Try Again
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="w-full max-w-md bg-white rounded-xl shadow-xl border-0 p-8 text-center">
+          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <XCircle className="h-10 w-10 text-red-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+            Failed to load orders
+          </h2>
+          <p className="text-gray-600 mb-6">
+            There was an error loading your order history
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-lg font-medium transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
       </div>
     );
   }
 
-  const purchases = data.data.purchases;
-  const pagination = data.data.pagination;
+  const purchases = data.data?.purchases || [];
+  const pagination = data.data?.pagination;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 p-4">
@@ -481,52 +599,35 @@ export default function OrdersPage() {
           <p className="text-gray-600">
             Track and manage your subscription orders
           </p>
-
-          {/* Show logged in user */}
-          {user && authData?.success && (
-            <div className="mt-4">
-              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="flex items-center gap-2 text-sm text-blue-800">
-                  <User className="h-4 w-4" />
-                  <span>
-                    Viewing orders for: <strong>{user?.name}</strong> (
-                    {user?.email})
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Filters */}
-        <Card className="mb-6 shadow-lg border-0">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Filter className="h-4 w-4 text-gray-600" />
-              <span className="font-medium text-gray-900">
-                Filter by Status:
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {["ALL", "ACTIVE", "COMPLETED", "CANCELLED", "PAUSED"].map(
-                (status) => (
-                  <Button
-                    key={status}
-                    variant={statusFilter === status ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleStatusFilter(status)}
-                    className="text-xs"
-                  >
-                    {status.replace("_", " ")}
-                  </Button>
-                )
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="bg-white rounded-xl shadow-lg border-0 p-4 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Filter className="h-4 w-4 text-gray-600" />
+            <span className="font-medium text-gray-900">Filter by Status:</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {["ALL", "ACTIVE", "COMPLETED", "CANCELLED", "PAUSED"].map(
+              (status) => (
+                <button
+                  key={status}
+                  onClick={() => handleStatusFilter(status)}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    statusFilter === status
+                      ? "bg-orange-500 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  {status.replace("_", " ")}
+                </button>
+              )
+            )}
+          </div>
+        </div>
 
         {/* Orders List */}
-        {purchases.length === 0 ? (
+        {purchases && purchases?.length === 0 ? (
           <div className="text-center py-12">
             <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">
@@ -542,40 +643,39 @@ export default function OrdersPage() {
           <>
             {/* Orders Grid */}
             <div className="space-y-6 mb-8">
-              {purchases.map((purchase) => (
-                <OrderCard key={purchase._id} purchase={purchase} />
-              ))}
+              {purchases &&
+                purchases?.map((purchase) => (
+                  <OrderCard key={purchase._id} purchase={purchase} />
+                ))}
             </div>
 
             {/* Pagination */}
-            {pagination.totalPages > 1 && (
+            {pagination && pagination.totalPages > 1 && (
               <div className="flex items-center justify-between">
                 <p className="text-sm text-gray-600">
                   Showing {purchases.length} of {pagination.totalPurchases}{" "}
                   orders
                 </p>
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
+                  <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
+                    className="px-3 py-1 text-sm border border-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 flex items-center gap-1"
                   >
                     <ChevronLeft className="h-4 w-4" />
                     Previous
-                  </Button>
+                  </button>
                   <span className="text-sm text-gray-600">
                     Page {currentPage} of {pagination.totalPages}
                   </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
+                  <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={!pagination.hasNext}
+                    className="px-3 py-1 text-sm border border-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 flex items-center gap-1"
                   >
                     Next
                     <ChevronRight className="h-4 w-4" />
-                  </Button>
+                  </button>
                 </div>
               </div>
             )}

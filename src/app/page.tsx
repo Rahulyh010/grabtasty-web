@@ -2,6 +2,7 @@ import React from "react";
 import Home from "./_components/home/Page";
 
 import { Metadata } from "next";
+import Footer from "./_components/Footer";
 
 export const metadata: Metadata = {
   title: "FoodDelivery - Fresh Meals Delivered Fast | Order Online",
@@ -155,6 +156,7 @@ export default function page() {
   return (
     <div>
       <Home />
+      <Footer />
     </div>
   );
 }
