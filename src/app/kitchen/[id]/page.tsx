@@ -1,6 +1,7 @@
 // In your app/kitchen/[id]/page.tsx
 // import KitchenPage from './_components/Kitchen'
-import KitchenSubscriptionsPage from "./_components/KitchenSubscriptionsPage";
+// import KitchenSubscriptionsPage from "./_components/KitchenSubscriptionsPage";
+import { KitchenPageNew } from "./_newcomponents/Kitchen";
 
 export default async function Page({
   params,
@@ -8,5 +9,5 @@ export default async function Page({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <KitchenSubscriptionsPage kitchenId={id} />;
+  return <KitchenPageNew kitchenId={id} />;
 }

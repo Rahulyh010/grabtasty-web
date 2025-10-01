@@ -198,7 +198,7 @@ export default function KitchenDiscoveryLanding() {
       </div>
 
       {/* Stats Section */}
-      <div className="py-12 bg-white border-b">
+      {/* <div className="py-12 bg-white border-b">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 text-center">
             <div>
@@ -225,7 +225,7 @@ export default function KitchenDiscoveryLanding() {
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Search Results Header */}
       <div className="container mx-auto px-4 py-8">
@@ -309,7 +309,7 @@ export default function KitchenDiscoveryLanding() {
             <Button
               size="lg"
               variant="outline"
-              className="border-white text-white hover:bg-white hover:text-orange-600"
+              className="border-white text-black hover:bg-white hover:text-orange-600"
             >
               Learn More
             </Button>

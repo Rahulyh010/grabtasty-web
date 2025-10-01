@@ -1,8 +1,8 @@
 import React from "react";
-import Home from "./_components/home/Page";
 
 import { Metadata } from "next";
-import Footer from "./_components/Footer";
+
+import SimplifiedHomepage from "./_components/home/SimplifiedHomepage";
 
 export const metadata: Metadata = {
   title: "FoodDelivery - Fresh Meals Delivered Fast | Order Online",
@@ -155,8 +155,8 @@ export const metadata: Metadata = {
 export default function page() {
   return (
     <div>
-      <Home />
-      <Footer />
+      {/* <Home /> */}
+      <SimplifiedHomepage />
     </div>
   );
 }

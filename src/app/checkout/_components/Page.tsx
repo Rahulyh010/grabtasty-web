@@ -105,10 +105,54 @@ export default function CheckoutPage() {
       });
 
       toast.success("Payment successful — redirecting to order details");
-      router.push(`/orders/${purchaseId}?success=true`);
+      router.push(`/subscriptions`);
     } catch (err: any) {
       console.error("Checkout error:", err);
-      toast.error(err?.message ?? "Checkout failed");
+
+      // Extract error data from response
+      const errorData = err?.response?.data;
+
+      if (errorData) {
+        // Handle field-specific errors
+        if (errorData.error?.fieldErrors) {
+          const backendFieldErrors: Record<string, string[]> = {};
+
+          Object.keys(errorData.error.fieldErrors).forEach((fieldPath) => {
+            const errors = errorData.error.fieldErrors[fieldPath];
+
+            // Handle nested fields like "customerInfo.pincode"
+            if (fieldPath.includes(".")) {
+              const actualField = fieldPath.split(".").pop();
+              if (actualField) {
+                backendFieldErrors[actualField] = errors;
+              }
+            } else if (fieldPath === "customerInfo") {
+              // Show as toast if error is on customerInfo object itself
+              toast.error(errors.join(", "));
+            } else {
+              backendFieldErrors[fieldPath] = errors;
+            }
+          });
+
+          // setFieldErrors(backendFieldErrors);
+        }
+
+        // Show general error message as toast
+        if (errorData.message) {
+          toast.error(errorData.message);
+        }
+
+        // Handle form-level errors
+        if (
+          errorData.error?.formErrors &&
+          errorData.error.formErrors.length > 0
+        ) {
+          toast.error(errorData.error.formErrors.join(", "));
+        }
+      } else {
+        // Fallback for non-structured errors
+        toast.error(err?.message || "Checkout failed. Please try again.");
+      }
     } finally {
       setIsProcessing(false);
     }

@@ -1,165 +1,140 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useRef, useMemo } from "react";
-import axios from "axios";
+import { useMemo, useRef } from "react";
+import axios, {
+  AxiosError,
+  AxiosInstance,
+  InternalAxiosRequestConfig,
+} from "axios";
 import { useRouter } from "next/navigation";
 
-interface FailedRequest {
-  resolve: (value: unknown) => void;
+interface QueuedRequest {
+  resolve: (value: any) => void;
   reject: (reason?: any) => void;
+  config: InternalAxiosRequestConfig;
 }
 
 export const useAxios = () => {
   const router = useRouter();
-  const failedQueueRef = useRef<FailedRequest[]>([]);
-  const isRefreshingRef = useRef(false);
+  const isRefreshing = useRef(false);
+  const failedQueue = useRef<QueuedRequest[]>([]);
 
-  // Get accessToken from cookies
-  const getAccessToken = () => {
+  const getAccessToken = (): string | null => {
     if (typeof document === "undefined") return null;
-    return document.cookie
-      .split(";")
-      .find((row) => row.trim().startsWith("accessToken="))
-      ?.split("=")[1];
+    const match = document.cookie.match(/accessToken=([^;]+)/);
+    return match ? match[1] : null;
   };
 
-  // // Check if refresh token exists
-  // const hasRefreshToken = () => {
-  //   if (typeof document === "undefined") return false;
-  //   return document.cookie
-  //     .split(";")
-  //     .some((row) => row.trim().startsWith("refreshToken="));
-  // };
-
-  // Proactively refresh token
-  const refreshToken = async (): Promise<boolean> => {
-    try {
-      const refreshApi = axios.create({
-        // baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
-        withCredentials: true,
-      });
-
-      await refreshApi.post("/auth/refresh");
-      return true;
-    } catch (error) {
-      router.replace("/signin"); // Use replace instead of push to avoid back navigation
-
-      console.error("Token refresh failed:", error);
-      return false;
-    }
+  const logout = () => {
+    document.cookie =
+      "accessToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    document.cookie =
+      "refreshToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    router.replace("/signin");
   };
 
-  // Process failed requests after refresh
-  const processQueue = (error: unknown) => {
-    failedQueueRef.current.forEach(({ resolve, reject }) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(null);
-      }
-    });
-    failedQueueRef.current = [];
-  };
-
-  // 🚀 Create axios instance synchronously using useMemo
   const api = useMemo(() => {
-    const axiosInstance = axios.create({
+    const instance: AxiosInstance = axios.create({
       baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
       withCredentials: true,
     });
 
-    // Enhanced request interceptor with proactive token management
-    axiosInstance.interceptors.request.use(async (config) => {
-      let token = getAccessToken();
+    // Request interceptor - attach access token
+    instance.interceptors.request.use(
+      (config) => {
+        const token = getAccessToken();
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
 
-      // If no access token but refresh token exists, try to get new access token
-      if (!token) {
-        const refreshSuccess = await refreshToken();
-        console.log("Refresh success:watch out", refreshSuccess);
+    // Response interceptor - catch 401 and refresh token
+    instance.interceptors.response.use(
+      (response) => response,
+      async (error: AxiosError) => {
+        const originalRequest = error.config as InternalAxiosRequestConfig & {
+          _retry?: boolean;
+        };
 
-        // Check if already refreshing to avoid multiple simultaneous refresh attempts
-        if (isRefreshingRef.current || !refreshSuccess) {
-          // Wait for ongoing refresh
+        // If not 401 or no config, just reject
+        if (error.response?.status !== 401 || !originalRequest) {
+          return Promise.reject(error);
+        }
+
+        // Prevent infinite loops
+        if (originalRequest._retry) {
+          logout();
+          return Promise.reject(error);
+        }
+
+        originalRequest._retry = true;
+
+        // If already refreshing, queue this request
+        if (isRefreshing.current) {
           return new Promise((resolve, reject) => {
-            failedQueueRef.current.push({
-              resolve: () => resolve(config),
+            failedQueue.current.push({
+              resolve,
               reject,
+              config: originalRequest,
             });
           });
         }
 
-        isRefreshingRef.current = true;
+        // Start refresh process
+        isRefreshing.current = true;
 
         try {
-          // const refreshSuccess = await refreshToken();
-          if (refreshSuccess) {
-            // Get the new token after refresh
-            token = getAccessToken();
-            processQueue(null);
-          } else {
-            // Refresh failed, redirect to login
-            processQueue(new Error("Token refresh failed"));
-            router.push("/signin");
-            return Promise.reject(new Error("Authentication failed"));
-          }
-        } catch (error) {
-          processQueue(error);
-          router.push("/signin");
-          return Promise.reject(error);
-        } finally {
-          isRefreshingRef.current = false;
-        }
-      }
+          // HIT REFRESH TOKEN ENDPOINT
+          await axios.post(
+            `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/refresh`,
+            {},
+            { withCredentials: true }
+          );
 
-      // Add token to request if available
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
+          // Refresh successful - get new token and retry all queued requests
+          const newToken = getAccessToken();
 
-      return config;
-    });
+          // Process all queued failed requests
+          const queuedRequests = [...failedQueue.current];
+          failedQueue.current = [];
 
-    // Handle 401 responses (fallback)
-    axiosInstance.interceptors.response.use(
-      (response) => response,
-      async (error) => {
-        const originalRequest = error.config;
-
-        if (error.response?.status === 401 && !originalRequest._retry) {
-          // Queue request if already refreshing
-          if (isRefreshingRef.current) {
-            return new Promise((resolve, reject) => {
-              failedQueueRef.current.push({ resolve, reject });
-            }).then(() => axiosInstance(originalRequest));
-          }
-
-          originalRequest._retry = true;
-          isRefreshingRef.current = true;
-
-          try {
-            const refreshSuccess = await refreshToken();
-
-            if (refreshSuccess) {
-              processQueue(null);
-              return axiosInstance(originalRequest);
-            } else {
-              throw new Error("Refresh failed");
+          // Retry all queued requests with new token
+          queuedRequests.forEach((queuedRequest) => {
+            if (newToken) {
+              queuedRequest.config.headers.Authorization = `Bearer ${newToken}`;
             }
-          } catch (refreshError) {
-            processQueue(refreshError);
-            router.push("/signin");
-            return Promise.reject(refreshError);
-          } finally {
-            isRefreshingRef.current = false;
-          }
-        }
+            instance(queuedRequest.config)
+              .then((response) => queuedRequest.resolve(response))
+              .catch((err) => queuedRequest.reject(err));
+          });
 
-        return Promise.reject(error);
+          // Retry the original request
+          if (newToken) {
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          }
+          return instance(originalRequest);
+        } catch (refreshError) {
+          // Refresh failed - reject all queued requests and logout
+          const queuedRequests = [...failedQueue.current];
+          failedQueue.current = [];
+
+          queuedRequests.forEach((queuedRequest) => {
+            queuedRequest.reject(refreshError);
+          });
+
+          logout();
+          return Promise.reject(refreshError);
+        } finally {
+          isRefreshing.current = false;
+        }
       }
     );
 
-    return axiosInstance;
-  }, [router]); // Only recreate if router changes
+    return instance;
+  }, [router]);
 
   return api;
 };
