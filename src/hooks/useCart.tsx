@@ -3,6 +3,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAxios } from "./useAxios"; // Your authenticated axios hook
+import { toast } from "sonner";
 
 export const useCart = () => {
   const axios = useAxios();
@@ -36,6 +37,18 @@ export const useAddToCart = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cart"] });
+    },
+    onError: (err: any) => {
+      // toast.error(err.response.data.message);
+      console.log(
+        err.response.data.code === "NO_TOKEN"
+          ? "REFRESH_TOKEN_FAILED"
+          : err.response.data.code
+      );
+      if (err.response.data.code) {
+        toast.error("Please login to add items to cart");
+        throw new Error("REFRESH_TOKEN_FAILED");
+      }
     },
   });
 };

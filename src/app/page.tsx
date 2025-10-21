@@ -2,7 +2,8 @@ import React from "react";
 
 import { Metadata } from "next";
 
-import SimplifiedHomepage from "./_components/home/SimplifiedHomepage";
+// import SimplifiedHomepage from "./_components/home/SimplifiedHomepage";
+import KitchenDiscoveryLanding from "./_components/home/Page";
 
 export const metadata: Metadata = {
   title: "FoodDelivery - Fresh Meals Delivered Fast | Order Online",
@@ -156,7 +157,7 @@ export default function page() {
   return (
     <div>
       {/* <Home /> */}
-      <SimplifiedHomepage />
+      <KitchenDiscoveryLanding />
     </div>
   );
 }
