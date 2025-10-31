@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import FeaturedDishes from "./FeaturedDishes";
 
 interface Kitchen {
   _id: string;
@@ -196,7 +197,7 @@ export default function KitchenDiscoveryLanding() {
           </div>
         </div>
       </div>
-
+      {/* <FeaturedDishes /> ✅ Add this */}
       {/* Stats Section */}
       {/* <div className="py-12 bg-white border-b">
         <div className="container mx-auto px-4">
@@ -226,7 +227,6 @@ export default function KitchenDiscoveryLanding() {
           </div>
         </div>
       </div> */}
-
       {/* Search Results Header */}
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
@@ -289,6 +289,7 @@ export default function KitchenDiscoveryLanding() {
         )}
       </div>
 
+      <FeaturedDishes />
       {/* CTA Section */}
       <div className="bg-gradient-to-r from-orange-500 to-amber-600 text-white py-16">
         <div className="container mx-auto px-4 text-center">

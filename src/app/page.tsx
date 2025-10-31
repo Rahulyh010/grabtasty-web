@@ -4,6 +4,7 @@ import { Metadata } from "next";
 
 // import SimplifiedHomepage from "./_components/home/SimplifiedHomepage";
 import KitchenDiscoveryLanding from "./_components/home/Page";
+// import FeaturedDishes from "./_components/home/FeaturedDishes";
 
 export const metadata: Metadata = {
   title: "FoodDelivery - Fresh Meals Delivered Fast | Order Online",

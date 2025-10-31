@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SubscriptionCardNew } from "./SubscriptionCard";
 import { FloatingCartButton } from "./FloatingCartNew";
+// import { KitchenDishes } from "./KitchenDishes";
 // import { SubscriptionCardNew } from "./SubscriptionCardNew";
 // import { FloatingCartNew } from "./FloatingCartNew";
 
@@ -150,7 +151,8 @@ export const KitchenPageNew: React.FC<KitchenPageNewProps> = ({
           </div>
         </div>
       </div>
-
+      {/* ✅ NEW: Kitchen Dishes Section */}
+      {/* <KitchenDishes kitchenId={kitchenId} /> */}
       {/* Filters Section */}
       <div className="bg-white border-b sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4">
